@@ -1,0 +1,181 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  DISPATCHER
+  CAPTAIN
+}
+
+enum BoatStatus {
+  FREE
+  ON_TRIP
+  MAINTENANCE
+}
+
+enum PaymentMethod {
+  CASH
+  TRANSFER
+  ACQUIRING
+}
+
+enum TripStatus {
+  CREATED
+  IN_PROGRESS
+  COMPLETED
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  phone        String?  @unique
+  email        String?  @unique
+  passwordHash String
+  role         Role
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  captainBoat      BoatCaptain?
+  captainRate      CaptainRate?
+  dispatcherRate   DispatcherRate?
+  tripsAsCaptain   Trip[]         @relation("CaptainTrips")
+  tripsAsDispatcher Trip[]        @relation("DispatcherTrips")
+  expenses         Expense[]
+  dailyBalances    DailyBalance[]
+
+  @@map("users")
+}
+
+model Boat {
+  id        String     @id @default(cuid())
+  name      String
+  status    BoatStatus @default(FREE)
+  isActive  Boolean    @default(true)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  captain BoatCaptain?
+  trips   Trip[]
+
+  @@map("boats")
+}
+
+model BoatCaptain {
+  id        String   @id @default(cuid())
+  boatId    String   @unique
+  captainId String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  boat    Boat @relation(fields: [boatId], references: [id], onDelete: Cascade)
+  captain User @relation(fields: [captainId], references: [id], onDelete: Cascade)
+
+  @@map("boat_captains")
+}
+
+model Pier {
+  id        String   @id @default(cuid())
+  name      String
+  cost      Float    @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  trips Trip[]
+
+  @@map("piers")
+}
+
+model CaptainRate {
+  id          String   @id @default(cuid())
+  captainId   String   @unique
+  hourlyRate  Float    @default(0)
+  exitPayment Float    @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  captain User @relation(fields: [captainId], references: [id], onDelete: Cascade)
+
+  @@map("captain_rates")
+}
+
+model DispatcherRate {
+  id           String   @id @default(cuid())
+  dispatcherId String   @unique
+  ratePerTrip  Float    @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  dispatcher User @relation(fields: [dispatcherId], references: [id], onDelete: Cascade)
+
+  @@map("dispatcher_rates")
+}
+
+model Trip {
+  id                String        @id @default(cuid())
+  boatId            String
+  captainId         String
+  dispatcherId      String?
+  pierId            String
+  price             Float
+  paymentMethod     PaymentMethod
+  status            TripStatus    @default(CREATED)
+  startedAt         DateTime?
+  endedAt           DateTime?
+  durationMinutes   Float?
+  captainSalary     Float?
+  dispatcherPayment Float?
+  pierCost          Float
+  profit            Float?
+  date              String
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  boat       Boat  @relation(fields: [boatId], references: [id])
+  captain    User  @relation("CaptainTrips", fields: [captainId], references: [id])
+  dispatcher User? @relation("DispatcherTrips", fields: [dispatcherId], references: [id])
+  pier       Pier  @relation(fields: [pierId], references: [id])
+
+  @@map("trips")
+}
+
+model Expense {
+  id        String   @id @default(cuid())
+  captainId String
+  amount    Float
+  comment   String
+  date      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  captain User @relation(fields: [captainId], references: [id], onDelete: Cascade)
+
+  @@map("expenses")
+}
+
+model DailyBalance {
+  id            String    @id @default(cuid())
+  captainId     String
+  date          String
+  cashIncome    Float     @default(0)
+  captainSalary Float     @default(0)
+  exitPayment   Float     @default(0)
+  expensesTotal Float     @default(0)
+  balance       Float     @default(0)
+  isClosed      Boolean   @default(false)
+  closedAt      DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  captain User @relation(fields: [captainId], references: [id], onDelete: Cascade)
+
+  @@unique([captainId, date])
+  @@map("daily_balances")
+}

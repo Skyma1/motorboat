@@ -1,0 +1,21 @@
+node_modules/
+dist/
+build/
+.env
+*.env.local
+*.log
+
+# Expo
+.expo/
+mobile/.expo/
+mobile/node_modules/
+
+# Prisma
+backend/prisma/migrations/
+
+# Web build
+web/dist/
+
+# OS
+.DS_Store
+Thumbs.db
