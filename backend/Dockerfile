@@ -2,6 +2,9 @@ FROM node:20-alpine
 
 WORKDIR /app
 
+# Устанавливаем openssl для корректной работы Prisma
+RUN apk add --no-cache openssl
+
 COPY package*.json ./
 RUN npm ci
 
