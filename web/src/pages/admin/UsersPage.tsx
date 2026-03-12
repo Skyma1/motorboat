@@ -21,12 +21,12 @@ const roleColor: Record<string, string> = {
 
 interface UserForm {
   name: string; phone: string; password: string; role: string;
-  hourlyRate: string; exitPayment: string; ratePerTrip: string;
+  hourlyRate: string; exitPayment: string;
 }
 
 const defaultForm: UserForm = {
   name: '', phone: '', password: '', role: 'CAPTAIN',
-  hourlyRate: '0', exitPayment: '0', ratePerTrip: '0',
+  hourlyRate: '1600', exitPayment: '2500',
 };
 
 export default function UsersPage() {
@@ -87,9 +87,8 @@ export default function UsersPage() {
       phone: user.phone || '',
       password: '',
       role: user.role,
-      hourlyRate: String(user.captainRate?.hourlyRate ?? 0),
-      exitPayment: String(user.captainRate?.exitPayment ?? 0),
-      ratePerTrip: String(user.dispatcherRate?.ratePerTrip ?? 0),
+      hourlyRate: String(user.captainRate?.hourlyRate ?? 1600),
+      exitPayment: String(user.captainRate?.exitPayment ?? 2500),
     });
     setOpen(true);
   };
@@ -144,9 +143,6 @@ export default function UsersPage() {
                               <p className="text-xs text-blue-600">
                                 {user.captainRate.hourlyRate}₽/ч · выход: {user.captainRate.exitPayment}₽
                               </p>
-                            )}
-                            {user.role === 'DISPATCHER' && user.dispatcherRate && (
-                              <p className="text-xs text-purple-600">{user.dispatcherRate.ratePerTrip}₽/рейс</p>
                             )}
                           </div>
                         </div>
@@ -215,12 +211,6 @@ export default function UsersPage() {
                   <Label>Оплата за выход (₽)</Label>
                   <Input type="number" value={form.exitPayment} onChange={(e) => setForm({ ...form, exitPayment: e.target.value })} min="0" />
                 </div>
-              </div>
-            )}
-            {form.role === 'DISPATCHER' && (
-              <div className="space-y-2">
-                <Label>Ставка за рейс (₽)</Label>
-                <Input type="number" value={form.ratePerTrip} onChange={(e) => setForm({ ...form, ratePerTrip: e.target.value })} min="0" />
               </div>
             )}
             <DialogFooter>

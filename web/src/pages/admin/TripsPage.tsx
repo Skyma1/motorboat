@@ -79,7 +79,17 @@ export default function TripsPage() {
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-1 text-sm">
                           <div><span className="text-muted-foreground">Капитан:</span> {trip.captain.name}</div>
                           {trip.dispatcher && <div><span className="text-muted-foreground">Диспетчер:</span> {trip.dispatcher.name}</div>}
-                          <div><span className="text-muted-foreground">Причал:</span> {trip.pier.name}</div>
+                          <div>
+                            <span className="text-muted-foreground">Швартовка:</span>{' '}
+                            {trip.dockingType === 'CITY' ? 'Городская' : trip.dockingType === 'PRIVATE' ? 'Наша' : 'Не заполнено'}
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">Причал:</span>{' '}
+                            {trip.pier?.name ?? '—'}
+                          </div>
+                          {trip.dockingType === 'CITY' && (
+                            <div><span className="text-muted-foreground">Часы швартовки:</span> {trip.cityDockHours ?? '—'}</div>
+                          )}
                           {trip.startedAt && <div><span className="text-muted-foreground">Начало:</span> {formatDateTime(trip.startedAt)}</div>}
                           {trip.endedAt && <div><span className="text-muted-foreground">Конец:</span> {formatDateTime(trip.endedAt)}</div>}
                           {trip.durationMinutes != null && (
@@ -92,6 +102,7 @@ export default function TripsPage() {
                           <p className="text-lg font-bold text-green-600">{formatMoney(trip.price)}</p>
                           <p className="text-xs text-muted-foreground">прибыль: {formatMoney(trip.profit ?? 0)}</p>
                           <p className="text-xs text-muted-foreground">капитан: {formatMoney(trip.captainSalary ?? 0)}</p>
+                          <p className="text-xs text-muted-foreground">швартовка: {formatMoney(trip.pierCost ?? 0)}</p>
                         </div>
                       )}
                       {trip.status !== 'COMPLETED' && (

@@ -17,7 +17,8 @@ interface Trip {
   profit: number | null;
   date: string;
   boat: { name: string };
-  pier: { name: string };
+  pier: { name: string } | null;
+  dockingType?: 'PRIVATE' | 'CITY' | null;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -60,7 +61,13 @@ export default function HistoryScreen() {
             <View style={styles.cardHeader}>
               <View style={styles.headerLeft}>
                 <Text style={styles.boatName}>{item.boat.name}</Text>
-                <Text style={styles.pierName}>{item.pier.name} · {item.date}</Text>
+                <Text style={styles.pierName}>
+                  {item.dockingType === 'CITY'
+                    ? `Городская${item.pier?.name ? `: ${item.pier.name}` : ''}`
+                    : item.dockingType === 'PRIVATE'
+                      ? 'Наш причал'
+                      : 'Швартовка не заполнена'} · {item.date}
+                </Text>
               </View>
               <View style={[styles.statusBadge, { backgroundColor: STATUS_COLORS[item.status] + '20' }]}>
                 <Text style={[styles.statusText, { color: STATUS_COLORS[item.status] }]}>

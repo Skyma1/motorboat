@@ -18,7 +18,6 @@ router.get('/', requireRoles('ADMIN', 'DISPATCHER'), async (_req, res: Response,
         isActive: true, createdAt: true,
         captainBoat: { include: { boat: true } },
         captainRate: true,
-        dispatcherRate: true,
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -47,7 +46,6 @@ router.get('/dispatchers', requireRoles('ADMIN'), async (_req, res: Response, ne
       where: { role: 'DISPATCHER', isActive: true },
       select: {
         id: true, name: true, phone: true,
-        dispatcherRate: true,
       },
       orderBy: { name: 'asc' },
     });
@@ -57,7 +55,7 @@ router.get('/dispatchers', requireRoles('ADMIN'), async (_req, res: Response, ne
 
 router.post('/', requireRoles('ADMIN'), async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const { name, phone, email, password, role, hourlyRate, exitPayment, ratePerTrip } = req.body;
+    const { name, phone, email, password, role, hourlyRate, exitPayment } = req.body;
 
     if (!name || !password || !role) throw new AppError('Имя, пароль и роль обязательны');
     if (!['CAPTAIN', 'DISPATCHER', 'ADMIN'].includes(role)) throw new AppError('Неверная роль');
@@ -78,10 +76,7 @@ router.post('/', requireRoles('ADMIN'), async (req: AuthRequest, res: Response, 
         passwordHash,
         role: role as Role,
         captainRate: role === 'CAPTAIN'
-          ? { create: { hourlyRate: Number(hourlyRate) || 0, exitPayment: Number(exitPayment) || 0 } }
-          : undefined,
-        dispatcherRate: role === 'DISPATCHER'
-          ? { create: { ratePerTrip: Number(ratePerTrip) || 0 } }
+          ? { create: { hourlyRate: Number(hourlyRate) || 1600, exitPayment: Number(exitPayment) || 2500 } }
           : undefined,
       },
       select: { id: true, name: true, role: true, phone: true, email: true },

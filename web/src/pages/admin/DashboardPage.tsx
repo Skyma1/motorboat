@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
-import { TrendingUp, Ship, Wallet, Users, AlertTriangle } from 'lucide-react';
+import { TrendingUp, Ship, Wallet, Users } from 'lucide-react';
 import api from '@/api/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -107,7 +107,7 @@ export default function DashboardPage() {
                     <div>
                       <p className="font-medium text-sm">{trip.boat.name}</p>
                       <p className="text-xs text-muted-foreground">Капитан: {trip.captain.name}</p>
-                      <p className="text-xs text-muted-foreground">Причал: {trip.pier.name}</p>
+                      <p className="text-xs text-muted-foreground">Причал: {trip.pier?.name ?? '—'}</p>
                     </div>
                     <div className="text-right">
                       <Badge className={tripStatusColor[trip.status]}>
@@ -165,12 +165,13 @@ export default function DashboardPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                 {[
                   { label: 'Выручка', value: summary.totalRevenue, color: 'text-green-600' },
                   { label: 'Зарплаты капитанов', value: summary.totalCaptainSalary, color: 'text-orange-600' },
-                  { label: 'Оплата диспетчеров', value: summary.totalDispatcherPayment, color: 'text-purple-600' },
                   { label: 'Стоимость причалов', value: summary.totalPierCost, color: 'text-slate-600' },
+                  { label: 'Подработки', value: summary.totalPartTimeIncome, color: 'text-blue-600' },
+                  { label: 'Заправка', value: summary.totalFuelExpenses, color: 'text-red-600' },
                 ].map(({ label, value, color }) => (
                   <div key={label} className="text-center p-4 bg-slate-50 rounded-lg">
                     <p className="text-xs text-muted-foreground mb-1">{label}</p>

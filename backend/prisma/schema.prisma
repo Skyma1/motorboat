@@ -31,6 +31,11 @@ enum TripStatus {
   COMPLETED
 }
 
+enum DockingType {
+  PRIVATE
+  CITY
+}
+
 model User {
   id           String   @id @default(cuid())
   name         String
@@ -42,13 +47,16 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  captainBoat      BoatCaptain?
-  captainRate      CaptainRate?
-  dispatcherRate   DispatcherRate?
-  tripsAsCaptain   Trip[]         @relation("CaptainTrips")
-  tripsAsDispatcher Trip[]        @relation("DispatcherTrips")
-  expenses         Expense[]
-  dailyBalances    DailyBalance[]
+  captainBoat          BoatCaptain?
+  captainRate          CaptainRate?
+  tripsAsCaptain       Trip[]         @relation("CaptainTrips")
+  tripsAsDispatcher    Trip[]         @relation("DispatcherTrips")
+  expenses             Expense[]
+  partTimeWorks        PartTimeWork[]
+  fuelExpenses         FuelExpense[]
+  cashHandovers        CashHandover[] @relation("CashHandoverCaptain")
+  cashHandoversEdited  CashHandover[] @relation("CashHandoverEditedBy")
+  dailyBalances        DailyBalance[]
 
   @@map("users")
 }
@@ -96,8 +104,8 @@ model Pier {
 model CaptainRate {
   id          String   @id @default(cuid())
   captainId   String   @unique
-  hourlyRate  Float    @default(0)
-  exitPayment Float    @default(0)
+  hourlyRate  Float    @default(1600)
+  exitPayment Float    @default(2500)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -106,42 +114,33 @@ model CaptainRate {
   @@map("captain_rates")
 }
 
-model DispatcherRate {
-  id           String   @id @default(cuid())
-  dispatcherId String   @unique
-  ratePerTrip  Float    @default(0)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  dispatcher User @relation(fields: [dispatcherId], references: [id], onDelete: Cascade)
-
-  @@map("dispatcher_rates")
-}
-
 model Trip {
-  id                String        @id @default(cuid())
-  boatId            String
-  captainId         String
-  dispatcherId      String?
-  pierId            String
-  price             Float
-  paymentMethod     PaymentMethod
-  status            TripStatus    @default(CREATED)
-  startedAt         DateTime?
-  endedAt           DateTime?
-  durationMinutes   Float?
-  captainSalary     Float?
-  dispatcherPayment Float?
-  pierCost          Float
-  profit            Float?
-  date              String
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
+  id              String        @id @default(cuid())
+  boatId          String
+  captainId       String
+  dispatcherId    String?
+  pierId          String?
+  price           Float
+  paymentMethod   PaymentMethod
+  status          TripStatus    @default(CREATED)
+  startedAt       DateTime?
+  endedAt         DateTime?
+  durationMinutes Float?
+  captainSalary   Float?
+  pierCost        Float         @default(0)
+  dockingType     DockingType?
+  cityDockHours   Float?
+  profit          Float?
+  date            String
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 
-  boat       Boat  @relation(fields: [boatId], references: [id])
-  captain    User  @relation("CaptainTrips", fields: [captainId], references: [id])
-  dispatcher User? @relation("DispatcherTrips", fields: [dispatcherId], references: [id])
-  pier       Pier  @relation(fields: [pierId], references: [id])
+  boat          Boat           @relation(fields: [boatId], references: [id])
+  captain       User           @relation("CaptainTrips", fields: [captainId], references: [id])
+  dispatcher    User?          @relation("DispatcherTrips", fields: [dispatcherId], references: [id])
+  pier          Pier?          @relation(fields: [pierId], references: [id])
+  partTimeWorks PartTimeWork[]
+  fuelExpenses  FuelExpense[]
 
   @@map("trips")
 }
@@ -158,6 +157,58 @@ model Expense {
   captain User @relation(fields: [captainId], references: [id], onDelete: Cascade)
 
   @@map("expenses")
+}
+
+model PartTimeWork {
+  id        String   @id @default(cuid())
+  captainId String
+  tripId    String?
+  amount    Float
+  comment   String
+  date      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  captain User  @relation(fields: [captainId], references: [id], onDelete: Cascade)
+  trip    Trip? @relation(fields: [tripId], references: [id], onDelete: SetNull)
+
+  @@map("part_time_works")
+}
+
+model FuelExpense {
+  id        String   @id @default(cuid())
+  captainId String
+  tripId    String?
+  liters    Float?
+  amount    Float
+  comment   String
+  date      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  captain User  @relation(fields: [captainId], references: [id], onDelete: Cascade)
+  trip    Trip? @relation(fields: [tripId], references: [id], onDelete: SetNull)
+
+  @@map("fuel_expenses")
+}
+
+model CashHandover {
+  id                   String    @id @default(cuid())
+  captainId            String
+  forDate              String
+  amount               Float
+  receiverText         String
+  createdByCaptainAt   DateTime  @default(now())
+  editedByDispatcherAt DateTime?
+  editedByDispatcherId String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  captain    User   @relation("CashHandoverCaptain", fields: [captainId], references: [id], onDelete: Cascade)
+  dispatcher User?  @relation("CashHandoverEditedBy", fields: [editedByDispatcherId], references: [id], onDelete: SetNull)
+
+  @@unique([captainId, forDate])
+  @@map("cash_handovers")
 }
 
 model DailyBalance {

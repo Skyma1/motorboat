@@ -3,8 +3,8 @@ import { prisma } from '../index';
 import { io } from '../index';
 import { authenticate, requireRoles, AuthRequest } from '../middleware/auth';
 import { AppError } from '../middleware/errorHandler';
-import { completeTripCalculations, recalcDailyBalance } from '../services/tripService';
-import { getTodayDateString } from '../utils/dateUtils';
+import { completeTripCalculations } from '../services/tripService';
+import { getDateString, getTodayDateString } from '../utils/dateUtils';
 
 const router = Router();
 
@@ -15,6 +15,22 @@ const tripInclude = {
   captain: { select: { id: true, name: true } },
   dispatcher: { select: { id: true, name: true } },
   pier: true,
+};
+
+const isHandoverRequired = async (captainId: string): Promise<boolean> => {
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayDate = getDateString(yesterday);
+  const yesterdayBalance = await prisma.dailyBalance.findUnique({
+    where: { captainId_date: { captainId, date: yesterdayDate } },
+  });
+  if (!yesterdayBalance || yesterdayBalance.cashIncome <= 0 || yesterdayBalance.balance <= 0) {
+    return false;
+  }
+  const handover = await prisma.cashHandover.findUnique({
+    where: { captainId_forDate: { captainId, forDate: yesterdayDate } },
+  });
+  return !handover;
 };
 
 router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
@@ -86,10 +102,10 @@ router.get('/:id', async (req: AuthRequest, res: Response, next: NextFunction) =
 
 router.post('/', requireRoles('CAPTAIN'), async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const { boatId, pierId, paymentMethod, price, dispatcherId } = req.body;
+    const { boatId, paymentMethod, price, dispatcherId } = req.body;
 
-    if (!boatId || !pierId || !paymentMethod) {
-      throw new AppError('Катер, причал и способ оплаты обязательны');
+    if (!boatId || !paymentMethod) {
+      throw new AppError('Катер и способ оплаты обязательны');
     }
     if (price === undefined || price === null || Number(price) < 0) {
       throw new AppError('Укажите цену прогулки');
@@ -103,8 +119,10 @@ router.post('/', requireRoles('CAPTAIN'), async (req: AuthRequest, res: Response
     });
     if (existingActiveTrip) throw new AppError('У вас уже есть активный рейс');
 
-    const pier = await prisma.pier.findUnique({ where: { id: pierId } });
-    if (!pier) throw new AppError('Причал не найден', 404);
+    const handoverPending = await isHandoverRequired(req.user!.id);
+    if (handoverPending) {
+      throw new AppError('Перед первым рейсом нужно указать, кому сдали вчерашнюю наличку');
+    }
 
     const today = getTodayDateString();
 
@@ -113,10 +131,9 @@ router.post('/', requireRoles('CAPTAIN'), async (req: AuthRequest, res: Response
         boatId,
         captainId: req.user!.id,
         dispatcherId: dispatcherId || null,
-        pierId,
         price: Number(price),
         paymentMethod,
-        pierCost: pier.cost,
+        pierCost: 0,
         date: today,
       },
       include: tripInclude,
@@ -128,6 +145,53 @@ router.post('/', requireRoles('CAPTAIN'), async (req: AuthRequest, res: Response
     io.emit('boat:updated', { boatId });
 
     res.status(201).json(trip);
+  } catch (err) { next(err); }
+});
+
+router.put('/:id/docking', requireRoles('ADMIN', 'DISPATCHER'), async (req, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const { dockingType, pierId, cityDockHours } = req.body;
+    if (!dockingType || !['PRIVATE', 'CITY'].includes(dockingType)) {
+      throw new AppError('Нужно указать тип швартовки: PRIVATE или CITY');
+    }
+
+    const trip = await prisma.trip.findUnique({ where: { id } });
+    if (!trip) throw new AppError('Рейс не найден', 404);
+
+    let computedPierCost = 0;
+    let targetPierId: string | null = null;
+    let targetDockHours: number | null = null;
+
+    if (dockingType === 'CITY') {
+      if (!pierId) throw new AppError('Для городской швартовки выберите причал');
+      const pier = await prisma.pier.findFirst({ where: { id: pierId, isActive: true } });
+      if (!pier) throw new AppError('Причал не найден', 404);
+      const hours = Number(cityDockHours);
+      if (!Number.isFinite(hours) || hours <= 0) throw new AppError('Укажите часы швартовки');
+      computedPierCost = pier.cost * hours;
+      targetPierId = pier.id;
+      targetDockHours = hours;
+    } else {
+      // PRIVATE: швартовка на своем причале бесплатная
+      computedPierCost = 0;
+      targetPierId = null;
+      targetDockHours = null;
+    }
+
+    const updated = await prisma.trip.update({
+      where: { id },
+      data: {
+        dockingType,
+        pierId: targetPierId,
+        cityDockHours: targetDockHours,
+        pierCost: computedPierCost,
+      },
+      include: tripInclude,
+    });
+
+    io.emit('trip:docking-updated', { tripId: id });
+    res.json(updated);
   } catch (err) { next(err); }
 });
 
@@ -157,6 +221,7 @@ router.post('/:id/complete', requireRoles('CAPTAIN'), async (req: AuthRequest, r
     if (!trip) throw new AppError('Рейс не найден', 404);
     if (trip.captainId !== req.user!.id) throw new AppError('Нет доступа', 403);
     if (trip.status !== 'IN_PROGRESS') throw new AppError('Рейс не запущен');
+    if (!trip.dockingType) throw new AppError('Диспетчер должен заполнить швартовку перед завершением');
 
     await prisma.trip.update({
       where: { id },

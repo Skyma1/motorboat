@@ -30,35 +30,9 @@ router.put('/captains/:captainId', requireRoles('ADMIN', 'DISPATCHER'), async (r
 
     const rate = await prisma.captainRate.upsert({
       where: { captainId },
-      create: { captainId, ...data },
+      create: { captainId, hourlyRate: 1600, exitPayment: 2500, ...data },
       update: data,
       include: { captain: { select: { id: true, name: true } } },
-    });
-    res.json(rate);
-  } catch (err) { next(err); }
-});
-
-router.get('/dispatchers', requireRoles('ADMIN'), async (_req, res: Response, next: NextFunction) => {
-  try {
-    const rates = await prisma.dispatcherRate.findMany({
-      include: { dispatcher: { select: { id: true, name: true } } },
-    });
-    res.json(rates);
-  } catch (err) { next(err); }
-});
-
-router.put('/dispatchers/:dispatcherId', requireRoles('ADMIN'), async (_req, res: Response, next: NextFunction) => {
-  try {
-    const { dispatcherId } = _req.params;
-    const { ratePerTrip } = _req.body;
-
-    if (ratePerTrip === undefined) throw new AppError('Ставка обязательна');
-
-    const rate = await prisma.dispatcherRate.upsert({
-      where: { dispatcherId },
-      create: { dispatcherId, ratePerTrip: Number(ratePerTrip) },
-      update: { ratePerTrip: Number(ratePerTrip) },
-      include: { dispatcher: { select: { id: true, name: true } } },
     });
     res.json(rate);
   } catch (err) { next(err); }

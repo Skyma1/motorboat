@@ -10,9 +10,6 @@ build/
 mobile/.expo/
 mobile/node_modules/
 
-# Prisma
-backend/prisma/migrations/
-
 # Web build
 web/dist/
 

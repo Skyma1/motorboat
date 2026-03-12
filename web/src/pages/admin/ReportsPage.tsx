@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { format, subDays, startOfMonth, endOfMonth, startOfWeek, endOfWeek } from 'date-fns';
+import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek } from 'date-fns';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import api from '@/api/client';
 import { Button } from '@/components/ui/button';
@@ -12,9 +12,8 @@ import { formatMoney } from '@/lib/utils';
 type Period = 'today' | 'week' | 'month' | 'custom';
 
 interface ReportData {
-  summary: { totalTrips: number; totalRevenue: number; totalExpenses: number; totalProfit: number };
+  summary: { totalTrips: number; totalRevenue: number; totalPartTimeIncome: number; totalExpenses: number; totalProfit: number };
   byCapitan: Record<string, { name: string; trips: number; revenue: number; salary: number; expenses: number }>;
-  byDispatcher: Record<string, { name: string; trips: number; payment: number }>;
   byBoat: Record<string, { name: string; trips: number; revenue: number; profit: number }>;
   byPier: Record<string, { name: string; trips: number; cost: number }>;
 }
@@ -91,10 +90,11 @@ export default function ReportsPage() {
       ) : !report ? null : (
         <div className="space-y-6">
           {/* Summary */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             {[
               { label: 'Рейсов', value: String(report.summary.totalTrips), color: 'text-slate-900' },
               { label: 'Выручка', value: formatMoney(report.summary.totalRevenue), color: 'text-green-600' },
+              { label: 'Подработки', value: formatMoney(report.summary.totalPartTimeIncome), color: 'text-blue-600' },
               { label: 'Расходы', value: formatMoney(report.summary.totalExpenses), color: 'text-red-600' },
               { label: 'Прибыль', value: formatMoney(report.summary.totalProfit), color: report.summary.totalProfit >= 0 ? 'text-green-700' : 'text-red-600' },
             ].map(({ label, value, color }) => (
@@ -171,27 +171,6 @@ export default function ReportsPage() {
                 </div>
               </CardContent>
             </Card>
-
-            {/* By dispatcher */}
-            {Object.keys(report.byDispatcher).length > 0 && (
-              <Card>
-                <CardHeader><CardTitle className="text-base">По диспетчерам</CardTitle></CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    {Object.entries(report.byDispatcher).map(([id, v]) => (
-                      <div key={id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg text-sm">
-                        <div>
-                          <p className="font-medium">{v.name}</p>
-                          <p className="text-xs text-muted-foreground">{v.trips} рейсов</p>
-                        </div>
-                        <p className="font-semibold text-purple-600">{formatMoney(v.payment)}</p>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
             {/* By pier */}
             <Card>
               <CardHeader><CardTitle className="text-base">По причалам</CardTitle></CardHeader>

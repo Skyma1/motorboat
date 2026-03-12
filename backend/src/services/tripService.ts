@@ -1,15 +1,13 @@
 import { prisma } from '../index';
 import { io } from '../index';
 import { AppError } from '../middleware/errorHandler';
-import { calcDurationMinutes, getDateString } from '../utils/dateUtils';
+import { calcDurationMinutes } from '../utils/dateUtils';
 
 export const completeTripCalculations = async (tripId: string) => {
   const trip = await prisma.trip.findUnique({
     where: { id: tripId },
     include: {
       captain: { include: { captainRate: true } },
-      dispatcher: { include: { dispatcherRate: true } },
-      pier: true,
     },
   });
 
@@ -19,18 +17,14 @@ export const completeTripCalculations = async (tripId: string) => {
   const durationMinutes = calcDurationMinutes(trip.startedAt, trip.endedAt);
   const hourlyRate = trip.captain.captainRate?.hourlyRate ?? 0;
   const captainSalary = (hourlyRate / 60) * durationMinutes;
-  const dispatcherPayment = trip.dispatcher
-    ? (trip.dispatcher.dispatcherRate?.ratePerTrip ?? 0)
-    : 0;
-  const pierCost = trip.pier.cost;
-  const profit = trip.price - captainSalary - dispatcherPayment - pierCost;
+  const pierCost = trip.pierCost ?? 0;
+  const profit = trip.price - captainSalary - pierCost;
 
   const updated = await prisma.trip.update({
     where: { id: tripId },
     data: {
       durationMinutes,
       captainSalary,
-      dispatcherPayment,
       pierCost,
       profit,
     },
@@ -52,6 +46,12 @@ export const recalcDailyBalance = async (captainId: string, date: string) => {
   const expenses = await prisma.expense.findMany({
     where: { captainId, date },
   });
+  const partTimeWorks = await prisma.partTimeWork.findMany({
+    where: { captainId, date },
+  });
+  const fuelExpenses = await prisma.fuelExpense.findMany({
+    where: { captainId, date },
+  });
 
   const captain = await prisma.user.findUnique({
     where: { id: captainId },
@@ -71,8 +71,11 @@ export const recalcDailyBalance = async (captainId: string, date: string) => {
   const effectiveSalary = Math.max(totalSalaryFromTrips, exitPayment);
 
   const expensesTotal = expenses.reduce((sum, e) => sum + e.amount, 0);
+  const partTimeIncome = partTimeWorks.reduce((sum, i) => sum + i.amount, 0);
+  const fuelTotal = fuelExpenses.reduce((sum, f) => sum + f.amount, 0);
+  const operationalSpend = expensesTotal + fuelTotal;
 
-  const balance = cashIncome - effectiveSalary - expensesTotal;
+  const balance = cashIncome + partTimeIncome - effectiveSalary - operationalSpend;
 
   await prisma.dailyBalance.upsert({
     where: { captainId_date: { captainId, date } },
@@ -82,17 +85,26 @@ export const recalcDailyBalance = async (captainId: string, date: string) => {
       cashIncome,
       captainSalary: effectiveSalary,
       exitPayment,
-      expensesTotal,
+      expensesTotal: operationalSpend,
       balance,
     },
     update: {
       cashIncome,
       captainSalary: effectiveSalary,
       exitPayment,
-      expensesTotal,
+      expensesTotal: operationalSpend,
       balance,
     },
   });
 
-  return { cashIncome, captainSalary: effectiveSalary, exitPayment, expensesTotal, balance };
+  return {
+    cashIncome,
+    partTimeIncome,
+    captainSalary: effectiveSalary,
+    exitPayment,
+    expensesTotal,
+    fuelTotal,
+    operationalSpend,
+    balance,
+  };
 };

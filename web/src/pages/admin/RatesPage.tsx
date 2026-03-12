@@ -16,11 +16,6 @@ export default function RatesPage() {
     queryFn: () => api.get('/users/captains').then((r) => r.data),
   });
 
-  const { data: dispatchers = [] } = useQuery<User[]>({
-    queryKey: ['dispatchers'],
-    queryFn: () => api.get('/users/dispatchers').then((r) => r.data),
-  });
-
   const captainRateMutation = useMutation({
     mutationFn: ({ captainId, hourlyRate, exitPayment }: { captainId: string; hourlyRate: number; exitPayment: number }) =>
       api.put(`/rates/captains/${captainId}`, { hourlyRate, exitPayment }),
@@ -28,15 +23,7 @@ export default function RatesPage() {
     onError: (e: unknown) => { toast({ title: 'Ошибка', description: (e as { response?: { data?: { message?: string } } })?.response?.data?.message, variant: 'destructive' }); },
   });
 
-  const dispatcherRateMutation = useMutation({
-    mutationFn: ({ dispatcherId, ratePerTrip }: { dispatcherId: string; ratePerTrip: number }) =>
-      api.put(`/rates/dispatchers/${dispatcherId}`, { ratePerTrip }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['dispatchers'] }); toast({ title: 'Ставка диспетчера обновлена' }); },
-    onError: (e: unknown) => { toast({ title: 'Ошибка', description: (e as { response?: { data?: { message?: string } } })?.response?.data?.message, variant: 'destructive' }); },
-  });
-
   const [captainRates, setCaptainRates] = useState<Record<string, { hourlyRate: string; exitPayment: string }>>({});
-  const [dispatcherRates, setDispatcherRates] = useState<Record<string, string>>({});
 
   const getCaptainRate = (captain: User) => ({
     hourlyRate: captainRates[captain.id]?.hourlyRate ?? String(captain.captainRate?.hourlyRate ?? 0),
@@ -47,7 +34,7 @@ export default function RatesPage() {
     <div className="p-8">
       <div className="mb-8">
         <h1 className="text-2xl font-bold">Ставки</h1>
-        <p className="text-muted-foreground text-sm mt-1">Настройка индивидуальных ставок для капитанов и диспетчеров</p>
+        <p className="text-muted-foreground text-sm mt-1">Настройка индивидуальных ставок для капитанов</p>
       </div>
 
       {/* Captains */}
@@ -113,52 +100,11 @@ export default function RatesPage() {
         </CardContent>
       </Card>
 
-      {/* Dispatchers */}
       <Card>
         <CardHeader>
-          <CardTitle>Ставки диспетчеров</CardTitle>
-          <CardDescription>Фиксированная сумма за каждый организованный рейс</CardDescription>
+          <CardTitle>Диспетчеры</CardTitle>
+          <CardDescription>Диспетчеры работают на фиксированной зарплате вне системы расчётов</CardDescription>
         </CardHeader>
-        <CardContent>
-          {dispatchers.length === 0 ? (
-            <p className="text-muted-foreground text-sm">Нет диспетчеров</p>
-          ) : (
-            <div className="space-y-4">
-              {dispatchers.map((dispatcher) => {
-                const rate = dispatcherRates[dispatcher.id] ?? String(dispatcher.dispatcherRate?.ratePerTrip ?? 0);
-                return (
-                  <div key={dispatcher.id} className="flex items-center gap-4 p-4 bg-slate-50 rounded-lg">
-                    <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center text-sm font-semibold text-blue-700 flex-shrink-0">
-                      {dispatcher.name[0]}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm">{dispatcher.name}</p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div>
-                        <p className="text-xs text-muted-foreground mb-1">₽/рейс</p>
-                        <Input
-                          type="number" min="0" className="w-28 h-8 text-sm"
-                          value={rate}
-                          onChange={(e) => setDispatcherRates({ ...dispatcherRates, [dispatcher.id]: e.target.value })}
-                        />
-                      </div>
-                      <Button
-                        size="sm"
-                        onClick={() => dispatcherRateMutation.mutate({
-                          dispatcherId: dispatcher.id,
-                          ratePerTrip: Number(rate),
-                        })}
-                      >
-                        <Save className="w-3.5 h-3.5" />
-                      </Button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </CardContent>
       </Card>
     </div>
   );

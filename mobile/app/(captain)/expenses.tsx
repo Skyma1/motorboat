@@ -6,42 +6,56 @@ import {
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import api from '@/api/client';
-import { useAuthStore } from '@/store/authStore';
 import { formatMoney, formatDateTime } from '@/utils/format';
 
-interface Expense {
+interface Row {
   id: string;
   amount: number;
   comment: string;
+  liters?: number | null;
   createdAt: string;
 }
 
 export default function ExpensesScreen() {
-  const { user } = useAuthStore();
   const qc = useQueryClient();
+  const [tab, setTab] = useState<'EXPENSE' | 'PART_TIME' | 'FUEL'>('EXPENSE');
   const [amount, setAmount] = useState('');
+  const [liters, setLiters] = useState('');
   const [comment, setComment] = useState('');
   const today = format(new Date(), 'yyyy-MM-dd');
 
-  const { data: expenses = [], isLoading } = useQuery<Expense[]>({
+  const path = tab === 'EXPENSE' ? '/expenses' : tab === 'PART_TIME' ? '/expenses/part-time' : '/expenses/fuel';
+
+  const { data: rows = [], isLoading } = useQuery<Row[]>({
     queryKey: ['expenses', today],
-    queryFn: () => api.get(`/expenses?date=${today}`).then((r) => r.data),
+    queryFn: () => api.get(`${path}?date=${today}`).then((r) => r.data),
     refetchInterval: 30_000,
   });
 
   const addMutation = useMutation({
-    mutationFn: (data: { amount: number; comment: string }) => api.post('/expenses', data),
+    mutationFn: (data: { amount: number; comment: string; liters?: number }) =>
+      tab === 'EXPENSE'
+        ? api.post('/expenses', data)
+        : tab === 'PART_TIME'
+          ? api.post('/expenses/part-time', data)
+          : api.post('/expenses/fuel', data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['expenses'] });
       qc.invalidateQueries({ queryKey: ['captain-balance'] });
       setAmount('');
+      setLiters('');
       setComment('');
     },
     onError: (e: unknown) => Alert.alert('Ошибка', (e as { response?: { data?: { message?: string } } })?.response?.data?.message),
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => api.delete(`/expenses/${id}`),
+    mutationFn: (id: string) =>
+      tab === 'EXPENSE'
+        ? api.delete(`/expenses/${id}`)
+        : tab === 'PART_TIME'
+          ? api.delete(`/expenses/part-time/${id}`)
+          : api.delete(`/expenses/fuel/${id}`),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['expenses'] });
       qc.invalidateQueries({ queryKey: ['captain-balance'] });
@@ -51,16 +65,36 @@ export default function ExpensesScreen() {
   const handleAdd = () => {
     if (!amount || Number(amount) <= 0) { Alert.alert('Ошибка', 'Введите корректную сумму'); return; }
     if (!comment.trim()) { Alert.alert('Ошибка', 'Комментарий обязателен'); return; }
-    addMutation.mutate({ amount: Number(amount), comment: comment.trim() });
+    if (tab === 'FUEL' && liters && Number(liters) <= 0) { Alert.alert('Ошибка', 'Литры должны быть больше 0'); return; }
+    addMutation.mutate({
+      amount: Number(amount),
+      comment: comment.trim(),
+      liters: tab === 'FUEL' && liters ? Number(liters) : undefined,
+    });
   };
 
-  const total = expenses.reduce((s, e) => s + e.amount, 0);
+  const total = rows.reduce((s, e) => s + e.amount, 0);
 
   return (
     <View style={styles.container}>
       {/* Add form */}
       <View style={styles.form}>
-        <Text style={styles.formTitle}>Добавить расход</Text>
+        <Text style={styles.formTitle}>Операции по наличке</Text>
+        <View style={styles.tabs}>
+          {[
+            { key: 'EXPENSE', label: 'Хоз. расход' },
+            { key: 'PART_TIME', label: 'Подработка' },
+            { key: 'FUEL', label: 'Заправка' },
+          ].map((item) => (
+            <TouchableOpacity
+              key={item.key}
+              style={[styles.tabBtn, tab === item.key && styles.tabBtnActive]}
+              onPress={() => setTab(item.key as 'EXPENSE' | 'PART_TIME' | 'FUEL')}
+            >
+              <Text style={[styles.tabText, tab === item.key && styles.tabTextActive]}>{item.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
         <View style={styles.row}>
           <TextInput
             style={[styles.input, styles.inputAmount]}
@@ -70,47 +104,70 @@ export default function ExpensesScreen() {
             keyboardType="numeric"
             placeholderTextColor="#9ca3af"
           />
+          {tab === 'FUEL' && (
+            <TextInput
+              style={[styles.input, styles.inputLiters]}
+              value={liters}
+              onChangeText={setLiters}
+              placeholder="Литры"
+              keyboardType="numeric"
+              placeholderTextColor="#9ca3af"
+            />
+          )}
           <TextInput
             style={[styles.input, styles.inputComment]}
             value={comment}
             onChangeText={setComment}
-            placeholder="На что потрачено"
+            placeholder={tab === 'PART_TIME' ? 'Что сделали' : tab === 'FUEL' ? 'Где/что заправили' : 'На что потрачено'}
             placeholderTextColor="#9ca3af"
           />
         </View>
         <TouchableOpacity style={styles.addButton} onPress={handleAdd} disabled={addMutation.isPending}>
-          {addMutation.isPending ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.addButtonText}>+ Добавить расход</Text>}
+          {addMutation.isPending ? <ActivityIndicator color="#fff" size="small" /> : (
+            <Text style={styles.addButtonText}>
+              {tab === 'PART_TIME' ? '+ Добавить подработку' : tab === 'FUEL' ? '+ Добавить заправку' : '+ Добавить расход'}
+            </Text>
+          )}
         </TouchableOpacity>
       </View>
 
       {/* Summary */}
-      {expenses.length > 0 && (
+      {rows.length > 0 && (
         <View style={styles.totalRow}>
-          <Text style={styles.totalLabel}>Итого расходов сегодня</Text>
-          <Text style={styles.totalAmount}>{formatMoney(total)}</Text>
+          <Text style={styles.totalLabel}>
+            {tab === 'PART_TIME' ? 'Итого подработок сегодня' : tab === 'FUEL' ? 'Итого заправок сегодня' : 'Итого расходов сегодня'}
+          </Text>
+          <Text style={[styles.totalAmount, tab === 'PART_TIME' ? styles.totalIncome : styles.totalExpense]}>
+            {tab === 'PART_TIME' ? '+' : '−'}{formatMoney(total)}
+          </Text>
         </View>
       )}
 
       {/* List */}
       {isLoading ? (
         <ActivityIndicator style={{ marginTop: 32 }} />
-      ) : expenses.length === 0 ? (
+      ) : rows.length === 0 ? (
         <View style={styles.empty}>
-          <Text style={styles.emptyText}>Расходов за сегодня нет</Text>
+          <Text style={styles.emptyText}>Записей за сегодня нет</Text>
         </View>
       ) : (
         <FlatList
-          data={expenses}
+          data={rows}
           keyExtractor={(e) => e.id}
           contentContainerStyle={styles.list}
           renderItem={({ item }) => (
             <View style={styles.expenseCard}>
               <View style={styles.expenseLeft}>
                 <Text style={styles.expenseComment}>{item.comment}</Text>
+                {tab === 'FUEL' && item.liters != null && (
+                  <Text style={styles.expenseDate}>Литры: {item.liters}</Text>
+                )}
                 <Text style={styles.expenseDate}>{formatDateTime(item.createdAt)}</Text>
               </View>
               <View style={styles.expenseRight}>
-                <Text style={styles.expenseAmount}>−{formatMoney(item.amount)}</Text>
+                <Text style={[styles.expenseAmount, tab === 'PART_TIME' ? styles.incomeAmount : styles.expenseAmountColor]}>
+                  {tab === 'PART_TIME' ? '+' : '−'}{formatMoney(item.amount)}
+                </Text>
                 <TouchableOpacity onPress={() => {
                   Alert.alert('Удалить?', item.comment, [
                     { text: 'Отмена' },
@@ -132,22 +189,32 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8fafc' },
   form: { backgroundColor: '#fff', padding: 16, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
   formTitle: { fontSize: 16, fontWeight: '700', color: '#0f172a', marginBottom: 12 },
+  tabs: { flexDirection: 'row', gap: 8, marginBottom: 12 },
+  tabBtn: { flex: 1, backgroundColor: '#f1f5f9', borderRadius: 8, paddingVertical: 8, alignItems: 'center' },
+  tabBtnActive: { backgroundColor: '#2563eb' },
+  tabText: { fontSize: 12, fontWeight: '600', color: '#475569' },
+  tabTextActive: { color: '#fff' },
   row: { flexDirection: 'row', gap: 10, marginBottom: 12 },
   input: { height: 44, borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 10, paddingHorizontal: 12, fontSize: 15, color: '#111827', backgroundColor: '#f9fafb' },
   inputAmount: { width: 110 },
+  inputLiters: { width: 85 },
   inputComment: { flex: 1 },
   addButton: { backgroundColor: '#2563eb', borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
   addButtonText: { color: '#fff', fontWeight: '600', fontSize: 15 },
   totalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#fef2f2' },
   totalLabel: { fontSize: 14, color: '#6b7280' },
-  totalAmount: { fontSize: 16, fontWeight: '700', color: '#dc2626' },
+  totalAmount: { fontSize: 16, fontWeight: '700' },
+  totalIncome: { color: '#16a34a' },
+  totalExpense: { color: '#dc2626' },
   list: { padding: 16, gap: 10 },
   expenseCard: { backgroundColor: '#fff', borderRadius: 12, padding: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 },
   expenseLeft: { flex: 1 },
   expenseComment: { fontSize: 15, fontWeight: '500', color: '#111827' },
   expenseDate: { fontSize: 12, color: '#9ca3af', marginTop: 2 },
   expenseRight: { alignItems: 'flex-end' },
-  expenseAmount: { fontSize: 16, fontWeight: '700', color: '#dc2626' },
+  expenseAmount: { fontSize: 16, fontWeight: '700' },
+  expenseAmountColor: { color: '#dc2626' },
+  incomeAmount: { color: '#16a34a' },
   deleteText: { fontSize: 12, color: '#9ca3af', marginTop: 4 },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', marginTop: 60 },
   emptyText: { fontSize: 16, color: '#9ca3af' },

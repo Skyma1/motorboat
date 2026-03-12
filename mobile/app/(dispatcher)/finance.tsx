@@ -10,9 +10,10 @@ interface DailySummary {
   trips: number;
   totalRevenue: number;
   totalCaptainSalary: number;
-  totalDispatcherPayment: number;
   totalPierCost: number;
   totalExpenses: number;
+  totalPartTimeIncome: number;
+  totalFuelExpenses: number;
   totalProfit: number;
 }
 
@@ -46,10 +47,11 @@ export default function FinanceScreen() {
           <View style={styles.detailsCard}>
             {[
               { label: 'Выручка', value: summary.totalRevenue, color: '#16a34a', sign: '+' },
+              { label: 'Подработки капитанов', value: summary.totalPartTimeIncome, color: '#16a34a', sign: '+' },
               { label: 'Зарплаты капитанов', value: summary.totalCaptainSalary, color: '#dc2626', sign: '−' },
-              { label: 'Оплата диспетчеров', value: summary.totalDispatcherPayment, color: '#dc2626', sign: '−' },
               { label: 'Стоимость причалов', value: summary.totalPierCost, color: '#dc2626', sign: '−' },
               { label: 'Хоз. расходы', value: summary.totalExpenses, color: '#dc2626', sign: '−' },
+              { label: 'Заправка', value: summary.totalFuelExpenses, color: '#dc2626', sign: '−' },
             ].map(({ label, value, color, sign }) => (
               <View key={label} style={styles.detailRow}>
                 <Text style={styles.detailLabel}>{label}</Text>

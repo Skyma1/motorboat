@@ -18,14 +18,24 @@ interface Trip {
   startedAt: string | null;
   durationMinutes: number | null;
   boat: { name: string };
-  pier: { name: string };
+  pier: { name: string } | null;
+  dockingType?: 'PRIVATE' | 'CITY' | null;
 }
 
 interface Balance {
   cashIncome: number;
+  partTimeIncome?: number;
   captainSalary: number;
+  fuelTotal?: number;
+  operationalSpend?: number;
   expensesTotal: number;
   balance: number;
+}
+
+interface HandoverRequired {
+  required: boolean;
+  forDate: string;
+  amount: number;
 }
 
 export default function CaptainHome() {
@@ -46,6 +56,11 @@ export default function CaptainHome() {
   const { data: balance } = useQuery<Balance>({
     queryKey: ['captain-balance', user?.id, today],
     queryFn: () => api.get(`/finance/captain-balance/${user?.id}?date=${today}`).then((r) => r.data),
+    refetchInterval: 30_000,
+  });
+  const { data: handoverRequired } = useQuery<HandoverRequired>({
+    queryKey: ['handover-required'],
+    queryFn: () => api.get('/finance/cash-handover/required').then((r) => r.data),
     refetchInterval: 30_000,
   });
 
@@ -130,11 +145,22 @@ export default function CaptainHome() {
         {balance && (
           <View style={styles.balanceDetails}>
             <Text style={styles.balanceDetail}>+ Наличные: {formatMoney(balance.cashIncome)}</Text>
+            <Text style={styles.balanceDetail}>+ Подработки: {formatMoney(balance.partTimeIncome ?? 0)}</Text>
             <Text style={styles.balanceDetail}>− ЗП: {formatMoney(balance.captainSalary)}</Text>
-            <Text style={styles.balanceDetail}>− Расходы: {formatMoney(balance.expensesTotal)}</Text>
+            <Text style={styles.balanceDetail}>− Расходы + заправка: {formatMoney(balance.operationalSpend ?? balance.expensesTotal)}</Text>
           </View>
         )}
       </View>
+
+      {handoverRequired?.required && (
+        <View style={styles.warningCard}>
+          <Text style={styles.warningTitle}>Внимание: не закрыта наличка за вчера</Text>
+          <Text style={styles.warningText}>
+            {handoverRequired.forDate}: {formatMoney(handoverRequired.amount)}
+          </Text>
+          <Text style={styles.warningText}>Перейдите во вкладку «Рейс», чтобы указать кому отдали наличку.</Text>
+        </View>
+      )}
 
       {/* Active trip */}
       {activeTrip ? (
@@ -150,7 +176,10 @@ export default function CaptainHome() {
 
           <View style={styles.tripInfo}>
             <Text style={styles.tripInfoText}>⛵ Катер: {activeTrip.boat.name}</Text>
-            <Text style={styles.tripInfoText}>⚓ Причал: {activeTrip.pier.name}</Text>
+            <Text style={styles.tripInfoText}>
+              ⚓ Швартовка: {activeTrip.dockingType === 'CITY' ? 'Городская' : activeTrip.dockingType === 'PRIVATE' ? 'Наш причал' : 'Не заполнено диспетчером'}
+            </Text>
+            {activeTrip.pier?.name && <Text style={styles.tripInfoText}>Причал: {activeTrip.pier.name}</Text>}
             <Text style={styles.tripInfoText}>💰 Цена: {formatMoney(activeTrip.price)}</Text>
             <Text style={styles.tripInfoText}>
               💳 Оплата: {{ CASH: 'Наличные', TRANSFER: 'Перевод', ACQUIRING: 'Эквайринг' }[activeTrip.paymentMethod]}
@@ -210,6 +239,9 @@ const styles = StyleSheet.create({
   balanceStatus: { fontSize: 14, color: 'rgba(255,255,255,0.8)', marginTop: 4, marginBottom: 12 },
   balanceDetails: { borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.2)', paddingTop: 12, gap: 4 },
   balanceDetail: { fontSize: 13, color: 'rgba(255,255,255,0.7)' },
+  warningCard: { backgroundColor: '#fff7ed', borderWidth: 1, borderColor: '#fdba74', borderRadius: 12, padding: 12, marginBottom: 16 },
+  warningTitle: { fontSize: 14, fontWeight: '700', color: '#9a3412', marginBottom: 4 },
+  warningText: { fontSize: 13, color: '#7c2d12' },
   tripCard: { backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 16, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 8, elevation: 2 },
   tripHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
   tripTitle: { fontSize: 17, fontWeight: '700', color: '#0f172a' },

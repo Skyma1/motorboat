@@ -2,6 +2,7 @@ export type Role = 'ADMIN' | 'DISPATCHER' | 'CAPTAIN';
 export type BoatStatus = 'FREE' | 'ON_TRIP' | 'MAINTENANCE';
 export type PaymentMethod = 'CASH' | 'TRANSFER' | 'ACQUIRING';
 export type TripStatus = 'CREATED' | 'IN_PROGRESS' | 'COMPLETED';
+export type DockingType = 'PRIVATE' | 'CITY';
 
 export interface User {
   id: string;
@@ -13,7 +14,6 @@ export interface User {
   createdAt: string;
   captainBoat?: BoatCaptain;
   captainRate?: CaptainRate;
-  dispatcherRate?: DispatcherRate;
 }
 
 export interface Boat {
@@ -48,18 +48,12 @@ export interface CaptainRate {
   exitPayment: number;
 }
 
-export interface DispatcherRate {
-  id: string;
-  dispatcherId: string;
-  ratePerTrip: number;
-}
-
 export interface Trip {
   id: string;
   boatId: string;
   captainId: string;
   dispatcherId: string | null;
-  pierId: string;
+  pierId: string | null;
   price: number;
   paymentMethod: PaymentMethod;
   status: TripStatus;
@@ -67,15 +61,16 @@ export interface Trip {
   endedAt: string | null;
   durationMinutes: number | null;
   captainSalary: number | null;
-  dispatcherPayment: number | null;
   pierCost: number;
+  dockingType: DockingType | null;
+  cityDockHours: number | null;
   profit: number | null;
   date: string;
   createdAt: string;
   boat: Boat;
   captain: Pick<User, 'id' | 'name'>;
   dispatcher: Pick<User, 'id' | 'name'> | null;
-  pier: Pier;
+  pier: Pier | null;
 }
 
 export interface Expense {
@@ -99,6 +94,18 @@ export interface DailyBalance {
   balance: number;
   isClosed: boolean;
   captain?: Pick<User, 'id' | 'name'>;
+  handover?: CashHandover | null;
+}
+
+export interface CashHandover {
+  id: string;
+  captainId: string;
+  forDate: string;
+  amount: number;
+  receiverText: string;
+  createdByCaptainAt: string;
+  editedByDispatcherAt: string | null;
+  editedByDispatcherId: string | null;
 }
 
 export interface DailySummary {
@@ -106,9 +113,10 @@ export interface DailySummary {
   trips: number;
   totalRevenue: number;
   totalCaptainSalary: number;
-  totalDispatcherPayment: number;
   totalPierCost: number;
   totalExpenses: number;
+  totalPartTimeIncome: number;
+  totalFuelExpenses: number;
   totalProfit: number;
   captainBalances: DailyBalance[];
 }

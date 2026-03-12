@@ -70,7 +70,6 @@ router.get('/me', authenticate, async (req: AuthRequest, res: Response, next: Ne
         email: true,
         captainBoat: { include: { boat: true } },
         captainRate: true,
-        dispatcherRate: true,
       },
     });
     res.json(user);

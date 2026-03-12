@@ -28,7 +28,6 @@ async function main() {
       phone: '+79000000001',
       passwordHash: dispatcherPass,
       role: 'DISPATCHER',
-      dispatcherRate: { create: { ratePerTrip: 1000 } },
     },
   });
   console.log(`✅ Dispatcher: ${dispatcher.name} (phone: +79000000001, pass: disp123)`);
@@ -42,7 +41,7 @@ async function main() {
       phone: '+79000000002',
       passwordHash: captainPass,
       role: 'CAPTAIN',
-      captainRate: { create: { hourlyRate: 1400, exitPayment: 3000 } },
+      captainRate: { create: { hourlyRate: 1600, exitPayment: 2500 } },
     },
   });
   console.log(`✅ Captain: ${captain.name} (phone: +79000000002, pass: capt123)`);

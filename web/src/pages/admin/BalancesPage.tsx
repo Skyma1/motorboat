@@ -16,6 +16,7 @@ interface BalanceEntry {
   exitPayment: number;
   expensesTotal: number;
   balance: number;
+  handover?: { receiverText: string; forDate: string } | null;
 }
 
 export default function BalancesPage() {
@@ -99,6 +100,15 @@ export default function BalancesPage() {
                     <span className={b.balance >= 0 ? 'text-green-700' : 'text-red-600'}>
                       {formatMoney(Math.abs(b.balance))}
                     </span>
+                  </div>
+                  <div className="border-t pt-1.5">
+                    {b.handover ? (
+                      <p className="text-xs text-slate-700">
+                        Сдача за {b.handover.forDate}: {b.handover.receiverText}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-amber-700">Нет записи, кому сдана вчерашняя наличка</p>
+                    )}
                   </div>
                 </div>
               </CardContent>

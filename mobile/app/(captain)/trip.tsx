@@ -5,12 +5,15 @@ import {
 } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/api/client';
-import { useAuthStore } from '@/store/authStore';
-import { formatMoney } from '@/utils/format';
+import { formatMoney, paymentMethodLabel } from '@/utils/format';
 
 interface Boat { id: string; name: string; status: string }
-interface Pier { id: string; name: string; cost: number }
 interface Dispatcher { id: string; name: string }
+interface HandoverRequired {
+  required: boolean;
+  forDate: string;
+  amount: number;
+}
 
 const PAYMENT_METHODS = [
   { value: 'CASH', label: 'Наличные', emoji: '💵' },
@@ -19,22 +22,21 @@ const PAYMENT_METHODS = [
 ];
 
 export default function TripScreen() {
-  const { user } = useAuthStore();
   const qc = useQueryClient();
   const [boatId, setBoatId] = useState('');
-  const [pierId, setPierId] = useState('');
   const [dispatcherId, setDispatcherId] = useState('');
   const [price, setPrice] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('CASH');
+  const [receiverText, setReceiverText] = useState('');
 
   const { data: boats = [] } = useQuery<Boat[]>({
     queryKey: ['boats'],
     queryFn: () => api.get('/boats').then((r) => r.data),
   });
 
-  const { data: piers = [] } = useQuery<Pier[]>({
-    queryKey: ['piers'],
-    queryFn: () => api.get('/piers').then((r) => r.data),
+  const { data: handoverInfo, refetch: refetchHandover } = useQuery<HandoverRequired>({
+    queryKey: ['handover-required'],
+    queryFn: () => api.get('/finance/cash-handover/required').then((r) => r.data),
   });
 
   const { data: dispatchers = [] } = useQuery<Dispatcher[]>({
@@ -43,7 +45,7 @@ export default function TripScreen() {
   });
 
   const createMutation = useMutation({
-    mutationFn: (data: { boatId: string; pierId: string; paymentMethod: string; price: number; dispatcherId?: string }) =>
+    mutationFn: (data: { boatId: string; paymentMethod: string; price: number; dispatcherId?: string }) =>
       api.post('/trips', data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['captain-active-trips'] });
@@ -53,15 +55,24 @@ export default function TripScreen() {
     onError: (e: unknown) => Alert.alert('Ошибка', (e as { response?: { data?: { message?: string } } })?.response?.data?.message),
   });
 
-  const selectedPier = piers.find((p) => p.id === pierId);
+  const handoverMutation = useMutation({
+    mutationFn: (payload: { forDate: string; amount: number; receiverText: string }) =>
+      api.post('/finance/cash-handover', payload),
+    onSuccess: async () => {
+      setReceiverText('');
+      await refetchHandover();
+      Alert.alert('Сохранено', 'Данные о сдаче налички сохранены');
+    },
+    onError: (e: unknown) => Alert.alert('Ошибка', (e as { response?: { data?: { message?: string } } })?.response?.data?.message),
+  });
 
   const handleSubmit = () => {
     if (!boatId) { Alert.alert('Ошибка', 'Выберите катер'); return; }
-    if (!pierId) { Alert.alert('Ошибка', 'Выберите причал'); return; }
     if (!price || Number(price) <= 0) { Alert.alert('Ошибка', 'Введите корректную цену'); return; }
+    if (handoverInfo?.required) { Alert.alert('Нужно заполнить', 'Сначала укажите, кому сдали вчерашнюю наличку'); return; }
 
     createMutation.mutate({
-      boatId, pierId, paymentMethod,
+      boatId, paymentMethod,
       price: Number(price),
       dispatcherId: dispatcherId || undefined,
     });
@@ -89,22 +100,37 @@ export default function TripScreen() {
         </ScrollView>
       </View>
 
-      {/* Pier */}
-      <View style={styles.section}>
-        <Text style={styles.label}>Причал *</Text>
-        <View style={styles.grid}>
-          {piers.map((pier) => (
-            <TouchableOpacity
-              key={pier.id}
-              style={[styles.pierCard, pierId === pier.id && styles.pierCardSelected]}
-              onPress={() => setPierId(pier.id)}
-            >
-              <Text style={[styles.pierName, pierId === pier.id && styles.pierNameSelected]}>{pier.name}</Text>
-              <Text style={[styles.pierCost, pierId === pier.id && styles.pierCostSelected]}>{formatMoney(pier.cost)}</Text>
-            </TouchableOpacity>
-          ))}
+      {handoverInfo?.required && (
+        <View style={styles.handoverCard}>
+          <Text style={styles.handoverTitle}>Нужно закрыть вчерашнюю наличку</Text>
+          <Text style={styles.handoverText}>Дата: {handoverInfo.forDate}</Text>
+          <Text style={styles.handoverText}>Сумма: {formatMoney(handoverInfo.amount)}</Text>
+          <TextInput
+            style={styles.input}
+            value={receiverText}
+            onChangeText={setReceiverText}
+            placeholder="Кому отдали (например: Диме)"
+            placeholderTextColor="#9ca3af"
+          />
+          <TouchableOpacity
+            style={[styles.submitButton, handoverMutation.isPending && styles.submitDisabled]}
+            onPress={() => {
+              if (!receiverText.trim()) {
+                Alert.alert('Ошибка', 'Укажите, кому отдали наличку');
+                return;
+              }
+              handoverMutation.mutate({
+                forDate: handoverInfo.forDate,
+                amount: handoverInfo.amount,
+                receiverText: receiverText.trim(),
+              });
+            }}
+            disabled={handoverMutation.isPending}
+          >
+            {handoverMutation.isPending ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitText}>Сохранить сдачу налички</Text>}
+          </TouchableOpacity>
         </View>
-      </View>
+      )}
 
       {/* Payment method */}
       <View style={styles.section}>
@@ -163,7 +189,7 @@ export default function TripScreen() {
       </View>
 
       {/* Summary */}
-      {selectedPier && price && (
+      {price && (
         <View style={styles.summaryCard}>
           <Text style={styles.summaryTitle}>Итого</Text>
           <View style={styles.summaryRow}>
@@ -171,8 +197,12 @@ export default function TripScreen() {
             <Text style={styles.summaryValue}>{formatMoney(Number(price))}</Text>
           </View>
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryKey}>Стоимость причала</Text>
-            <Text style={styles.summaryValue}>{formatMoney(selectedPier.cost)}</Text>
+            <Text style={styles.summaryKey}>Причал / швартовка</Text>
+            <Text style={styles.summaryValue}>Заполняет диспетчер</Text>
+          </View>
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryKey}>Оплата</Text>
+            <Text style={styles.summaryValue}>{paymentMethodLabel[paymentMethod]}</Text>
           </View>
         </View>
       )}
@@ -203,13 +233,9 @@ const styles = StyleSheet.create({
   chipDisabled: { opacity: 0.5 },
   chipText: { fontSize: 14, color: '#374151', fontWeight: '500' },
   chipTextSelected: { color: '#fff' },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  pierCard: { padding: 12, borderRadius: 12, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0', width: '47%' },
-  pierCardSelected: { borderColor: '#2563eb', backgroundColor: '#eff6ff' },
-  pierName: { fontSize: 14, fontWeight: '600', color: '#374151' },
-  pierNameSelected: { color: '#1d4ed8' },
-  pierCost: { fontSize: 13, color: '#6b7280', marginTop: 2 },
-  pierCostSelected: { color: '#2563eb' },
+  handoverCard: { backgroundColor: '#fff7ed', borderRadius: 12, borderWidth: 1, borderColor: '#fdba74', padding: 14, marginBottom: 20 },
+  handoverTitle: { fontSize: 15, fontWeight: '700', color: '#9a3412', marginBottom: 6 },
+  handoverText: { fontSize: 13, color: '#7c2d12', marginBottom: 4 },
   paymentRow: { flexDirection: 'row', gap: 10 },
   paymentCard: { flex: 1, padding: 12, borderRadius: 12, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'center' },
   paymentCardSelected: { borderColor: '#2563eb', backgroundColor: '#eff6ff' },
