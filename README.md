@@ -56,8 +56,18 @@ docker-compose up -d
 
 ### 4. Примените миграции и заполните тестовыми данными
 
+Backend при старте сам выполняет `prisma migrate deploy`. Если база пустая — миграции применятся автоматически. Seed нужно выполнить вручную:
+
 ```bash
-docker exec motorboat_backend npx prisma migrate deploy
+docker exec motorboat_backend npm run db:seed
+```
+
+**Если backend циклически перезапускается** (ошибка P3009 «failed migrations»), значит в БД остались записи о неудачных миграциях. Для **свежего деплоя** (без важных данных):
+
+```bash
+docker-compose down -v
+docker-compose up -d
+# Подождите ~15 сек, пока backend применит миграции
 docker exec motorboat_backend npm run db:seed
 ```
 
