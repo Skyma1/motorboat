@@ -37,6 +37,7 @@ export default function RootLayout() {
       <AuthGuard />
       <StatusBar style="light" />
       <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="index" />
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(captain)" />
         <Stack.Screen name="(dispatcher)" />
