@@ -12,10 +12,20 @@ router.post('/login', async (req: Request, res: Response, next: NextFunction) =>
     const { login, password } = req.body;
     if (!login || !password) throw new AppError('Введите логин и пароль');
 
+    const normalizedLogin = String(login).trim();
+    const phoneDigits = normalizedLogin.replace(/\D/g, '');
+    const phoneCandidates = Array.from(
+      new Set([
+        normalizedLogin,
+        phoneDigits,
+        phoneDigits ? `+${phoneDigits}` : '',
+      ].filter(Boolean))
+    );
+
     const user = await prisma.user.findFirst({
       where: {
         isActive: true,
-        OR: [{ phone: login }, { email: login }],
+        OR: [{ phone: { in: phoneCandidates } }, { email: normalizedLogin }],
       },
     });
 
