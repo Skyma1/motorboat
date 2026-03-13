@@ -18,7 +18,7 @@ const corsOrigin = process.env.CORS_ORIGIN || 'http://localhost:3000';
 
 export const io = new Server(httpServer, {
   cors: {
-    origin: ['http://localhost:3000', 'http://localhost:8081', corsOrigin],
+    origin: corsOrigin === '*' ? true : ['http://localhost:3000', 'http://localhost:8081', corsOrigin],
     methods: ['GET', 'POST'],
     credentials: true,
   },
@@ -32,7 +32,7 @@ app.use(cors({
       'http://localhost:8081',
       corsOrigin,
     ];
-    if (!origin || allowed.includes(origin)) {
+    if (!origin || allowed.includes(origin) || corsOrigin === '*') {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));
