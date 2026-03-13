@@ -22,7 +22,14 @@ export default function LoginScreen() {
       const { data } = await api.post('/auth/login', { login: login.trim(), password });
       await setAuth(data.user, data.accessToken, data.refreshToken);
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Неверный логин или пароль';
+      const ax = err as { response?: { data?: { message?: string } }; code?: string; message?: string };
+      let msg = ax?.response?.data?.message;
+      if (!msg) {
+        const isNetworkError = !ax?.response || ax?.code === 'ECONNABORTED' || /network|cleartext|failed/i.test(String(ax?.message || ''));
+        msg = isNetworkError
+          ? 'Нет соединения с сервером. Проверьте интернет и URL API.'
+          : 'Неверный логин или пароль';
+      }
       Alert.alert('Ошибка входа', msg);
     } finally {
       setLoading(false);

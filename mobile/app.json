@@ -21,7 +21,8 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#1e3a8a"
       },
-      "package": "com.motorboat.app"
+      "package": "com.motorboat.app",
+      "usesCleartextTraffic": true
     },
     "plugins": [
       "expo-router",
