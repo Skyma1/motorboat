@@ -4,13 +4,27 @@ import {
   KeyboardAvoidingView, Platform, ActivityIndicator, Alert,
 } from 'react-native';
 import { useAuthStore } from '@/store/authStore';
-import api from '@/api/client';
+import api, { getApiBaseUrl } from '@/api/client';
 
 export default function LoginScreen() {
   const [login, setLogin] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [checking, setChecking] = useState(false);
   const { setAuth } = useAuthStore();
+
+  const handleTestConnection = async () => {
+    setChecking(true);
+    try {
+      await api.get('/health');
+      Alert.alert('OK', `Сервер доступен\n\nAPI: ${getApiBaseUrl()}`);
+    } catch (err: unknown) {
+      const ax = err as { message?: string; code?: string };
+      Alert.alert('Ошибка', `Не удалось подключиться.\n\nAPI: ${getApiBaseUrl()}\n\n${ax?.message || String(err)}`);
+    } finally {
+      setChecking(false);
+    }
+  };
 
   const handleLogin = async () => {
     if (!login.trim() || !password.trim()) {
@@ -90,6 +104,15 @@ export default function LoginScreen() {
               <Text style={styles.buttonText}>Войти</Text>
             )}
           </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.linkButton}
+            onPress={handleTestConnection}
+            disabled={checking}
+          >
+            <Text style={styles.linkText}>
+              {checking ? 'Проверка...' : 'Проверить соединение'}
+            </Text>
+          </TouchableOpacity>
         </View>
       </View>
     </KeyboardAvoidingView>
@@ -121,4 +144,6 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: { opacity: 0.7 },
   buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  linkButton: { marginTop: 12, alignItems: 'center', paddingVertical: 8 },
+  linkText: { color: '#94a3b8', fontSize: 13 },
 });

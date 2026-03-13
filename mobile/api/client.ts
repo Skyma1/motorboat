@@ -3,6 +3,8 @@ import { useAuthStore } from '@/store/authStore';
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001/api';
 
+export const getApiBaseUrl = () => BASE_URL;
+
 export const api = axios.create({
   baseURL: BASE_URL,
   headers: { 'Content-Type': 'application/json' },
