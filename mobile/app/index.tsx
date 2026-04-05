@@ -8,8 +8,8 @@ export default function Index() {
 
   if (user) {
     if (user.role === 'CAPTAIN') return <Redirect href="/(captain)/home" />;
-    if (user.role === 'DISPATCHER') return <Redirect href="/(dispatcher)/home" />;
-    return <Redirect href="/(captain)/home" />;
+    if (user.role === 'DISPATCHER' || user.role === 'ADMIN') return <Redirect href="/(dispatcher)/home" />;
+    return <Redirect href="/(auth)/login" />;
   }
 
   return <Redirect href="/(auth)/login" />;

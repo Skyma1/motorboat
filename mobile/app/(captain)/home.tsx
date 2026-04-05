@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
-import { ru } from 'date-fns/locale';
+import { Modal, TextInput } from 'react-native';
 import api from '@/api/client';
 import { useAuthStore } from '@/store/authStore';
 import { formatMoney, formatDuration } from '@/utils/format';
@@ -18,8 +18,6 @@ interface Trip {
   startedAt: string | null;
   durationMinutes: number | null;
   boat: { name: string };
-  pier: { name: string } | null;
-  dockingType?: 'PRIVATE' | 'CITY' | null;
 }
 
 interface Balance {
@@ -37,11 +35,23 @@ interface HandoverRequired {
   forDate: string;
   amount: number;
 }
+interface Boat { id: string; name: string; status: string }
+
+const PAYMENT_METHODS = [
+  { value: 'CASH', label: 'Наличные', emoji: '💵' },
+  { value: 'TRANSFER', label: 'Перевод', emoji: '🔄' },
+  { value: 'ACQUIRING', label: 'Эквайринг', emoji: '💳' },
+];
 
 export default function CaptainHome() {
-  const { user, logout } = useAuthStore();
+  const user = useAuthStore((state) => state.user);
   const qc = useQueryClient();
   const [elapsed, setElapsed] = useState(0);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [boatId, setBoatId] = useState('');
+  const [price, setPrice] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('CASH');
+  const [receiverText, setReceiverText] = useState('');
 
   const today = format(new Date(), 'yyyy-MM-dd');
 
@@ -62,6 +72,10 @@ export default function CaptainHome() {
     queryKey: ['handover-required'],
     queryFn: () => api.get('/finance/cash-handover/required').then((r) => r.data),
     refetchInterval: 30_000,
+  });
+  const { data: boats = [] } = useQuery<Boat[]>({
+    queryKey: ['boats'],
+    queryFn: () => api.get('/boats').then((r) => r.data),
   });
 
   const activeTrip = activeTrips.find((t) => t.status === 'IN_PROGRESS') ?? activeTrips[0];
@@ -95,6 +109,33 @@ export default function CaptainHome() {
     },
     onError: (e: unknown) => Alert.alert('Ошибка', (e as { response?: { data?: { message?: string } } })?.response?.data?.message),
   });
+  const createMutation = useMutation({
+    mutationFn: async (data: { boatId: string; paymentMethod: string; price: number }) => {
+      const created = await api.post('/trips', data).then((r) => r.data as { id: string });
+      await api.post(`/trips/${created.id}/start`);
+      return created;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['captain-active-trips'] });
+      qc.invalidateQueries({ queryKey: ['handover-required'] });
+      setCreateOpen(false);
+      setBoatId('');
+      setPrice('');
+      setPaymentMethod('CASH');
+      Alert.alert('Рейс создан', 'Рейс сразу запущен');
+    },
+    onError: (e: unknown) => Alert.alert('Ошибка', (e as { response?: { data?: { message?: string } } })?.response?.data?.message),
+  });
+  const handoverMutation = useMutation({
+    mutationFn: (payload: { forDate: string; amount: number; receiverText: string }) =>
+      api.post('/finance/cash-handover', payload),
+    onSuccess: async () => {
+      setReceiverText('');
+      await qc.invalidateQueries({ queryKey: ['handover-required'] });
+      Alert.alert('Сохранено', 'Данные о сдаче налички сохранены');
+    },
+    onError: (e: unknown) => Alert.alert('Ошибка', (e as { response?: { data?: { message?: string } } })?.response?.data?.message),
+  });
 
   const handleStart = () => {
     if (!activeTrip) return;
@@ -112,44 +153,28 @@ export default function CaptainHome() {
     ]);
   };
 
+  const handleCreate = () => {
+    if (!boatId) { Alert.alert('Ошибка', 'Выберите катер'); return; }
+    if (!price || Number(price) <= 0) { Alert.alert('Ошибка', 'Введите корректную цену'); return; }
+    if (handoverRequired?.required) { Alert.alert('Нужно заполнить', 'Сначала укажите, кому сдали вчерашнюю наличку'); return; }
+    createMutation.mutate({ boatId, paymentMethod, price: Number(price) });
+  };
+
   return (
     <ScrollView
       style={styles.container}
       contentContainerStyle={styles.content}
       refreshControl={<RefreshControl refreshing={tripsLoading} onRefresh={refetch} />}
     >
-      {/* Header */}
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.greeting}>Привет, {user?.name.split(' ')[0]}!</Text>
-          <Text style={styles.date}>{format(new Date(), 'd MMMM', { locale: ru })}</Text>
+      <View style={styles.metricsGrid}>
+        <View style={[styles.metricCard, styles.metricPrimary]}>
+          <Text style={styles.metricLabel}>Заработал за день</Text>
+          <Text style={styles.metricValue}>{formatMoney(balance?.captainSalary ?? 0)}</Text>
         </View>
-        <TouchableOpacity onPress={() => { Alert.alert('Выход', 'Выйти из системы?', [{ text: 'Отмена' }, { text: 'Выйти', onPress: logout }]); }}>
-          <Text style={styles.logoutText}>Выйти</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Balance card */}
-      <View style={[styles.balanceCard, balance && balance.balance >= 0 ? styles.balancePositive : styles.balanceNegative]}>
-        <Text style={styles.balanceTitle}>Баланс наличных сегодня</Text>
-        <Text style={styles.balanceAmount}>
-          {balance ? formatMoney(Math.abs(balance.balance)) : '—'}
-        </Text>
-        <Text style={styles.balanceStatus}>
-          {balance
-            ? balance.balance > 0 ? '↑ Сдать владельцу'
-              : balance.balance < 0 ? '↓ Получить от бизнеса'
-              : 'Ноль — расчёты совпадают'
-            : 'Загрузка...'}
-        </Text>
-        {balance && (
-          <View style={styles.balanceDetails}>
-            <Text style={styles.balanceDetail}>+ Наличные: {formatMoney(balance.cashIncome)}</Text>
-            <Text style={styles.balanceDetail}>+ Подработки: {formatMoney(balance.partTimeIncome ?? 0)}</Text>
-            <Text style={styles.balanceDetail}>− ЗП: {formatMoney(balance.captainSalary)}</Text>
-            <Text style={styles.balanceDetail}>− Расходы + заправка: {formatMoney(balance.operationalSpend ?? balance.expensesTotal)}</Text>
-          </View>
-        )}
+        <View style={styles.metricCard}>
+          <Text style={styles.metricLabelDark}>Средств на судне</Text>
+          <Text style={styles.metricValueDark}>{formatMoney(balance?.cashIncome ?? 0)}</Text>
+        </View>
       </View>
 
       {handoverRequired?.required && (
@@ -158,7 +183,7 @@ export default function CaptainHome() {
           <Text style={styles.warningText}>
             {handoverRequired.forDate}: {formatMoney(handoverRequired.amount)}
           </Text>
-          <Text style={styles.warningText}>Перейдите во вкладку «Рейс», чтобы указать кому отдали наличку.</Text>
+          <Text style={styles.warningText}>Нажмите «Начать рейс», чтобы сперва указать кому сдали наличку.</Text>
         </View>
       )}
 
@@ -176,10 +201,6 @@ export default function CaptainHome() {
 
           <View style={styles.tripInfo}>
             <Text style={styles.tripInfoText}>⛵ Катер: {activeTrip.boat.name}</Text>
-            <Text style={styles.tripInfoText}>
-              ⚓ Швартовка: {activeTrip.dockingType === 'CITY' ? 'Городская' : activeTrip.dockingType === 'PRIVATE' ? 'Наш причал' : 'Не заполнено диспетчером'}
-            </Text>
-            {activeTrip.pier?.name && <Text style={styles.tripInfoText}>Причал: {activeTrip.pier.name}</Text>}
             <Text style={styles.tripInfoText}>💰 Цена: {formatMoney(activeTrip.price)}</Text>
             <Text style={styles.tripInfoText}>
               💳 Оплата: {{ CASH: 'Наличные', TRANSFER: 'Перевод', ACQUIRING: 'Эквайринг' }[activeTrip.paymentMethod]}
@@ -217,9 +238,105 @@ export default function CaptainHome() {
       ) : (
         <View style={styles.noTripCard}>
           <Text style={styles.noTripText}>⛵ Нет активных рейсов</Text>
-          <Text style={styles.noTripHint}>Перейдите на вкладку «Рейс» для создания</Text>
+          <Text style={styles.noTripHint}>Создайте новый рейс прямо с главной</Text>
+          <TouchableOpacity style={styles.createTripButton} onPress={() => setCreateOpen(true)}>
+            <Text style={styles.createTripButtonText}>Начать рейс</Text>
+          </TouchableOpacity>
         </View>
       )}
+      <Modal visible={createOpen} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modal}>
+            <Text style={styles.modalTitle}>Новый рейс</Text>
+            <Text style={styles.modalSubtitle}>Заполните данные перед стартом прогулки</Text>
+            <Text style={styles.inputLabel}>Катер *</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              <View style={styles.chipRow}>
+                {boats.filter((b) => b.status !== 'MAINTENANCE').map((boat) => (
+                  <TouchableOpacity
+                    key={boat.id}
+                    style={[styles.chip, boatId === boat.id && styles.chipSelected, boat.status === 'ON_TRIP' && styles.chipDisabled]}
+                    onPress={() => boat.status !== 'ON_TRIP' && setBoatId(boat.id)}
+                  >
+                    <Text style={[styles.chipText, boatId === boat.id && styles.chipTextSelected]}>
+                      {boat.name}{boat.status === 'ON_TRIP' ? ' (занят)' : ''}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
+
+            {handoverRequired?.required && (
+              <View style={styles.handoverCard}>
+                <Text style={styles.handoverTitle}>Сначала закройте вчерашнюю наличку</Text>
+                <Text style={styles.handoverText}>Дата: {handoverRequired.forDate}</Text>
+                <Text style={styles.handoverText}>Сумма: {formatMoney(handoverRequired.amount)}</Text>
+                <TextInput
+                  style={styles.input}
+                  value={receiverText}
+                  onChangeText={setReceiverText}
+                  placeholder="Кому отдали наличку"
+                  placeholderTextColor="#9ca3af"
+                />
+                <TouchableOpacity
+                  style={[styles.modalPrimaryButton, handoverMutation.isPending && styles.submitDisabled]}
+                  onPress={() => {
+                    if (!receiverText.trim()) {
+                      Alert.alert('Ошибка', 'Укажите, кому отдали наличку');
+                      return;
+                    }
+                    handoverMutation.mutate({
+                      forDate: handoverRequired.forDate,
+                      amount: handoverRequired.amount,
+                      receiverText: receiverText.trim(),
+                    });
+                  }}
+                  disabled={handoverMutation.isPending}
+                >
+                  <Text style={styles.modalPrimaryText}>Сохранить сдачу налички</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            <Text style={styles.inputLabel}>Способ оплаты *</Text>
+            <View style={styles.paymentRow}>
+              {PAYMENT_METHODS.map((m) => (
+                <TouchableOpacity
+                  key={m.value}
+                  style={[styles.paymentCard, paymentMethod === m.value && styles.paymentCardSelected]}
+                  onPress={() => setPaymentMethod(m.value)}
+                >
+                  <Text style={styles.paymentEmoji}>{m.emoji}</Text>
+                  <Text style={[styles.paymentLabel, paymentMethod === m.value && styles.paymentLabelSelected]}>{m.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={styles.inputLabel}>Цена прогулки (₽) *</Text>
+            <TextInput
+              style={styles.input}
+              value={price}
+              onChangeText={setPrice}
+              placeholder="5000"
+              keyboardType="numeric"
+              placeholderTextColor="#9ca3af"
+            />
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.modalCancelButton} onPress={() => setCreateOpen(false)}>
+                <Text style={styles.modalCancelText}>Отмена</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalPrimaryButton, createMutation.isPending && styles.submitDisabled]}
+                onPress={handleCreate}
+                disabled={createMutation.isPending}
+              >
+                <Text style={styles.modalPrimaryText}>{createMutation.isPending ? 'Создание...' : 'Создать рейс'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -227,18 +344,21 @@ export default function CaptainHome() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8fafc' },
   content: { padding: 16, paddingBottom: 32 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  greeting: { fontSize: 22, fontWeight: '700', color: '#0f172a' },
-  date: { fontSize: 14, color: '#64748b', marginTop: 2 },
-  logoutText: { fontSize: 14, color: '#64748b' },
-  balanceCard: { borderRadius: 16, padding: 20, marginBottom: 16 },
-  balancePositive: { backgroundColor: '#052e16' },
-  balanceNegative: { backgroundColor: '#450a0a' },
-  balanceTitle: { fontSize: 14, color: 'rgba(255,255,255,0.7)', marginBottom: 4 },
-  balanceAmount: { fontSize: 36, fontWeight: '800', color: '#fff' },
-  balanceStatus: { fontSize: 14, color: 'rgba(255,255,255,0.8)', marginTop: 4, marginBottom: 12 },
-  balanceDetails: { borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.2)', paddingTop: 12, gap: 4 },
-  balanceDetail: { fontSize: 13, color: 'rgba(255,255,255,0.7)' },
+  metricsGrid: { gap: 12, marginBottom: 14 },
+  metricCard: {
+    borderRadius: 16,
+    padding: 18,
+    backgroundColor: '#fff',
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  metricPrimary: { backgroundColor: '#052e16' },
+  metricLabel: { fontSize: 13, color: 'rgba(255,255,255,0.75)' },
+  metricValue: { fontSize: 32, fontWeight: '800', color: '#fff', marginTop: 6 },
+  metricLabelDark: { fontSize: 13, color: '#64748b' },
+  metricValueDark: { fontSize: 28, fontWeight: '800', color: '#0f172a', marginTop: 6 },
   warningCard: { backgroundColor: '#fff7ed', borderWidth: 1, borderColor: '#fdba74', borderRadius: 12, padding: 12, marginBottom: 16 },
   warningTitle: { fontSize: 14, fontWeight: '700', color: '#9a3412', marginBottom: 4 },
   warningText: { fontSize: 13, color: '#7c2d12' },
@@ -258,7 +378,42 @@ const styles = StyleSheet.create({
   startButton: { backgroundColor: '#16a34a', borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
   endButton: { backgroundColor: '#dc2626', borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
   actionButtonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  submitDisabled: { opacity: 0.7 },
   noTripCard: { backgroundColor: '#fff', borderRadius: 16, padding: 32, alignItems: 'center', marginBottom: 16 },
   noTripText: { fontSize: 18, fontWeight: '600', color: '#374151', marginBottom: 8 },
   noTripHint: { fontSize: 14, color: '#9ca3af', textAlign: 'center' },
+  createTripButton: {
+    marginTop: 14,
+    backgroundColor: '#2563eb',
+    borderRadius: 10,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+  },
+  createTripButtonText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  modal: { backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 16, gap: 10 },
+  modalTitle: { fontSize: 18, fontWeight: '700', color: '#0f172a' },
+  modalSubtitle: { fontSize: 13, color: '#64748b', marginBottom: 2 },
+  inputLabel: { fontSize: 14, fontWeight: '600', color: '#334155' },
+  chipRow: { flexDirection: 'row', gap: 8 },
+  chip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0' },
+  chipSelected: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
+  chipDisabled: { opacity: 0.5 },
+  chipText: { fontSize: 14, color: '#374151', fontWeight: '500' },
+  chipTextSelected: { color: '#fff' },
+  handoverCard: { backgroundColor: '#fff7ed', borderRadius: 12, borderWidth: 1, borderColor: '#fdba74', padding: 12, gap: 4 },
+  handoverTitle: { fontSize: 14, fontWeight: '700', color: '#9a3412' },
+  handoverText: { fontSize: 13, color: '#7c2d12' },
+  paymentRow: { flexDirection: 'row', gap: 8 },
+  paymentCard: { flex: 1, padding: 10, borderRadius: 12, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'center' },
+  paymentCardSelected: { borderColor: '#2563eb', backgroundColor: '#eff6ff' },
+  paymentEmoji: { fontSize: 18, marginBottom: 2 },
+  paymentLabel: { fontSize: 12, color: '#6b7280', fontWeight: '500' },
+  paymentLabelSelected: { color: '#1d4ed8' },
+  input: { height: 48, borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 12, paddingHorizontal: 14, fontSize: 16, backgroundColor: '#fff', color: '#111827' },
+  modalActions: { flexDirection: 'row', gap: 10, marginTop: 6 },
+  modalCancelButton: { flex: 1, borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 10, alignItems: 'center', justifyContent: 'center', paddingVertical: 12 },
+  modalCancelText: { color: '#334155', fontWeight: '600' },
+  modalPrimaryButton: { flex: 1, backgroundColor: '#2563eb', borderRadius: 10, alignItems: 'center', justifyContent: 'center', paddingVertical: 12 },
+  modalPrimaryText: { color: '#fff', fontWeight: '700' },
 });

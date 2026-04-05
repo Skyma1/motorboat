@@ -10,6 +10,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from '@/hooks/use-toast';
+import { useAuthStore } from '@/store/authStore';
+import { canManageUsers } from '@/lib/permissions';
+import { pluralizeRu } from '@/lib/utils';
 import type { User } from '@/types';
 
 const roleLabel: Record<string, string> = { ADMIN: 'Администратор', DISPATCHER: 'Диспетчер', CAPTAIN: 'Капитан' };
@@ -30,6 +33,8 @@ const defaultForm: UserForm = {
 };
 
 export default function UsersPage() {
+  const { user } = useAuthStore();
+  const canManage = canManageUsers(user?.role);
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [editUser, setEditUser] = useState<User | null>(null);
@@ -107,11 +112,15 @@ export default function UsersPage() {
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Пользователи</h1>
-          <p className="text-muted-foreground text-sm mt-1">{users.length} пользователей в системе</p>
+          <p className="text-muted-foreground text-sm mt-1">
+            {users.length} {pluralizeRu(users.length, ['пользователь', 'пользователя', 'пользователей'])} в системе
+          </p>
         </div>
-        <Button onClick={openCreate}>
-          <Plus className="w-4 h-4 mr-2" /> Добавить
-        </Button>
+        {canManage && (
+          <Button onClick={openCreate}>
+            <Plus className="w-4 h-4 mr-2" /> Добавить
+          </Button>
+        )}
       </div>
 
       {isLoading ? (
@@ -149,16 +158,23 @@ export default function UsersPage() {
                         <div className="flex items-center gap-2">
                           <Badge className={roleColor[user.role]}>{roleLabel[user.role]}</Badge>
                           {!user.isActive && <Badge variant="destructive">Неактивен</Badge>}
-                          <Button size="sm" variant="ghost" onClick={() => openEdit(user)}>
-                            <Pencil className="w-3.5 h-3.5" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => toggleMutation.mutate({ id: user.id, isActive: !user.isActive })}
-                          >
-                            {user.isActive ? <UserX className="w-3.5 h-3.5 text-red-500" /> : <UserCheck className="w-3.5 h-3.5 text-green-500" />}
-                          </Button>
+                          {canManage && (
+                            <>
+                              <Button size="sm" variant="ghost" className="h-auto flex-col gap-1 px-2 py-1" onClick={() => openEdit(user)}>
+                                <Pencil className="w-3.5 h-3.5" />
+                                <span className="text-[10px] leading-none text-slate-600">отредактировать</span>
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-auto flex-col gap-1 px-2 py-1"
+                                onClick={() => toggleMutation.mutate({ id: user.id, isActive: !user.isActive })}
+                              >
+                                {user.isActive ? <UserX className="w-3.5 h-3.5 text-red-500" /> : <UserCheck className="w-3.5 h-3.5 text-green-500" />}
+                                <span className="text-[10px] leading-none text-red-600">удалить</span>
+                              </Button>
+                            </>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -170,7 +186,7 @@ export default function UsersPage() {
         </div>
       )}
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open && canManage} onOpenChange={setOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{editUser ? 'Редактировать пользователя' : 'Новый пользователь'}</DialogTitle>

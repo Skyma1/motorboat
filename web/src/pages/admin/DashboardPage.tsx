@@ -5,7 +5,7 @@ import { TrendingUp, Ship, Wallet, Users } from 'lucide-react';
 import api from '@/api/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { formatMoney, tripStatusColor, tripStatusLabel, boatStatusColor, boatStatusLabel } from '@/lib/utils';
+import { formatMoney, pluralizeRu, tripStatusColor, tripStatusLabel, boatStatusColor, boatStatusLabel } from '@/lib/utils';
 import type { Trip, Boat, DailySummary } from '@/types';
 
 function StatCard({ title, value, sub, icon: Icon, color }: {
@@ -63,7 +63,7 @@ export default function DashboardPage() {
         <StatCard
           title="Выручка сегодня"
           value={formatMoney(summary?.totalRevenue ?? 0)}
-          sub={`${summary?.trips ?? 0} рейсов`}
+          sub={`${summary?.trips ?? 0} ${pluralizeRu(summary?.trips ?? 0, ['рейс', 'рейса', 'рейсов'])}`}
           icon={TrendingUp}
           color="bg-green-500"
         />

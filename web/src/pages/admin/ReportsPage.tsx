@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { formatMoney } from '@/lib/utils';
+import { formatMoney, pluralizeRu } from '@/lib/utils';
 
 type Period = 'today' | 'week' | 'month' | 'custom';
 
@@ -139,7 +139,9 @@ export default function ReportsPage() {
                     <div key={id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg text-sm">
                       <div>
                         <p className="font-medium">{v.name}</p>
-                        <p className="text-xs text-muted-foreground">{v.trips} рейсов</p>
+                        <p className="text-xs text-muted-foreground">
+                          {v.trips} {pluralizeRu(v.trips, ['рейс', 'рейса', 'рейсов'])}
+                        </p>
                       </div>
                       <div className="text-right">
                         <p className="font-semibold text-green-600">{formatMoney(v.revenue)}</p>
@@ -160,7 +162,9 @@ export default function ReportsPage() {
                     <div key={id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg text-sm">
                       <div>
                         <p className="font-medium">{v.name}</p>
-                        <p className="text-xs text-muted-foreground">{v.trips} рейсов</p>
+                        <p className="text-xs text-muted-foreground">
+                          {v.trips} {pluralizeRu(v.trips, ['рейс', 'рейса', 'рейсов'])}
+                        </p>
                       </div>
                       <div className="text-right">
                         <p className="font-semibold text-green-600">{formatMoney(v.revenue)}</p>
@@ -180,7 +184,9 @@ export default function ReportsPage() {
                     <div key={id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg text-sm">
                       <div>
                         <p className="font-medium">{v.name}</p>
-                        <p className="text-xs text-muted-foreground">{v.trips} рейсов</p>
+                        <p className="text-xs text-muted-foreground">
+                          {v.trips} {pluralizeRu(v.trips, ['рейс', 'рейса', 'рейсов'])}
+                        </p>
                       </div>
                       <p className="font-semibold text-slate-600">{formatMoney(v.cost)}</p>
                     </div>

@@ -10,10 +10,15 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from '@/hooks/use-toast';
-import { boatStatusColor, boatStatusLabel } from '@/lib/utils';
+import { boatStatusColor, boatStatusLabel, pluralizeRu } from '@/lib/utils';
+import { useAuthStore } from '@/store/authStore';
+import { canCreateBoat, canDeleteBoat } from '@/lib/permissions';
 import type { Boat, User } from '@/types';
 
 export default function BoatsPage() {
+  const { user } = useAuthStore();
+  const canCreate = canCreateBoat(user?.role);
+  const canDelete = canDeleteBoat(user?.role);
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [editBoat, setEditBoat] = useState<Boat | null>(null);
@@ -63,14 +68,29 @@ export default function BoatsPage() {
     else createMutation.mutate(data);
   };
 
+  const handleDelete = (boat: Boat) => {
+    if (!canDelete) {
+      toast({ title: 'Нет доступа', description: 'Удалять катера может только администратор', variant: 'destructive' });
+      return;
+    }
+    if (boat.status === 'ON_TRIP') {
+      toast({ title: 'Удаление недоступно', description: 'Нельзя удалить катер с активным рейсом', variant: 'destructive' });
+      return;
+    }
+    if (!window.confirm(`Удалить катер "${boat.name}"?`)) return;
+    deleteMutation.mutate(boat.id);
+  };
+
   return (
     <div className="p-8">
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-2xl font-bold">Катера</h1>
-          <p className="text-muted-foreground text-sm mt-1">{boats.length} катеров в системе</p>
+          <p className="text-muted-foreground text-sm mt-1">
+            {boats.length} {pluralizeRu(boats.length, ['катер', 'катера', 'катеров'])} в системе
+          </p>
         </div>
-        <Button onClick={openCreate}><Plus className="w-4 h-4 mr-2" /> Добавить катер</Button>
+        {canCreate && <Button onClick={openCreate}><Plus className="w-4 h-4 mr-2" /> Добавить катер</Button>}
       </div>
 
       {isLoading ? <p className="text-muted-foreground">Загрузка...</p> : (
@@ -91,9 +111,11 @@ export default function BoatsPage() {
                   <Button size="sm" variant="outline" onClick={() => openEdit(boat)}>
                     <Pencil className="w-3.5 h-3.5 mr-1" /> Изменить
                   </Button>
-                  <Button size="sm" variant="outline" onClick={() => deleteMutation.mutate(boat.id)} disabled={boat.status === 'ON_TRIP'}>
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </Button>
+                  {canDelete && (
+                    <Button size="sm" variant="outline" onClick={() => handleDelete(boat)}>
+                      <Trash2 className="w-3.5 h-3.5 mr-1" /> Удалить
+                    </Button>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -101,7 +123,7 @@ export default function BoatsPage() {
         </div>
       )}
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open && canCreate} onOpenChange={setOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{editBoat ? 'Редактировать катер' : 'Новый катер'}</DialogTitle>

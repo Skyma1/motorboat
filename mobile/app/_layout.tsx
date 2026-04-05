@@ -23,8 +23,8 @@ function AuthGuard() {
     if (!user && !inAuthGroup) router.replace('/(auth)/login');
     else if (user && inAuthGroup) {
       if (user.role === 'CAPTAIN') router.replace('/(captain)/home');
-      else if (user.role === 'DISPATCHER') router.replace('/(dispatcher)/home');
-      else router.replace('/(captain)/home');
+      else if (user.role === 'DISPATCHER' || user.role === 'ADMIN') router.replace('/(dispatcher)/home');
+      else router.replace('/(auth)/login');
     }
   }, [user, isLoading, segments]);
 

@@ -1,4 +1,5 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
+import type { ComponentType } from 'react';
 import {
   LayoutDashboard, Users, Ship, Anchor, BarChart3,
   FileText, Wallet, LogOut, TrendingUp, Settings,
@@ -6,16 +7,23 @@ import {
 import { useAuthStore } from '@/store/authStore';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { canAccessNavItem } from '@/lib/permissions';
 
-const navItems = [
-  { to: '/', label: 'Дашборд', icon: LayoutDashboard, exact: true },
-  { to: '/trips', label: 'Рейсы', icon: Ship },
-  { to: '/balances', label: 'Балансы капитанов', icon: Wallet },
-  { to: '/reports', label: 'Отчёты', icon: TrendingUp },
-  { to: '/users', label: 'Пользователи', icon: Users },
-  { to: '/boats', label: 'Катера', icon: Ship },
-  { to: '/piers', label: 'Причалы', icon: Anchor },
-  { to: '/rates', label: 'Ставки', icon: Settings },
+const navItems: Array<{
+  key: 'dashboard' | 'trips' | 'balances' | 'reports' | 'users' | 'boats' | 'piers' | 'rates';
+  to: string;
+  label: string;
+  icon: ComponentType<{ className?: string }>;
+  exact?: boolean;
+}> = [
+  { key: 'dashboard', to: '/', label: 'Дашборд', icon: LayoutDashboard, exact: true },
+  { key: 'trips', to: '/trips', label: 'Рейсы', icon: Ship },
+  { key: 'balances', to: '/balances', label: 'Балансы капитанов', icon: Wallet },
+  { key: 'reports', to: '/reports', label: 'Отчёты', icon: TrendingUp },
+  { key: 'users', to: '/users', label: 'Пользователи', icon: Users },
+  { key: 'boats', to: '/boats', label: 'Катера', icon: Ship },
+  { key: 'piers', to: '/piers', label: 'Причалы', icon: Anchor },
+  { key: 'rates', to: '/rates', label: 'Ставки', icon: Settings },
 ];
 
 export default function AdminLayout() {
@@ -44,7 +52,9 @@ export default function AdminLayout() {
         </div>
 
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-          {navItems.map(({ to, label, icon: Icon, exact }) => (
+          {navItems
+            .filter((item) => canAccessNavItem(user?.role, item.key))
+            .map(({ to, label, icon: Icon, exact }) => (
             <NavLink
               key={to}
               to={to}
@@ -67,7 +77,15 @@ export default function AdminLayout() {
         <div className="p-4 border-t border-slate-700">
           <div className="mb-3 px-3">
             <p className="text-sm font-medium text-white truncate">{user?.name}</p>
-            <p className="text-xs text-slate-400">{user?.role === 'ADMIN' ? 'Администратор' : user?.role}</p>
+            <p className="text-xs text-slate-400">
+              {user?.role === 'ADMIN'
+                ? 'Администратор'
+                : user?.role === 'DISPATCHER'
+                  ? 'Диспетчер'
+                  : user?.role === 'CAPTAIN'
+                    ? 'Капитан'
+                    : user?.role}
+            </p>
           </div>
           <Button
             variant="ghost"

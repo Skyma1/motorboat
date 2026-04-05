@@ -1,7 +1,11 @@
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function CaptainLayout() {
+  const insets = useSafeAreaInsets();
+  const tabPaddingBottom = Math.max(insets.bottom, 8);
+
   return (
     <Tabs
       screenOptions={{
@@ -11,9 +15,11 @@ export default function CaptainLayout() {
           backgroundColor: '#fff',
           borderTopWidth: 1,
           borderTopColor: '#f1f5f9',
-          paddingBottom: 4,
-          height: 60,
+          paddingBottom: tabPaddingBottom,
+          paddingTop: 4,
+          height: 56 + tabPaddingBottom,
         },
+        tabBarLabelStyle: { fontSize: 11, marginBottom: 2 },
         headerStyle: { backgroundColor: '#0f172a' },
         headerTintColor: '#fff',
         headerTitleStyle: { fontWeight: '700' },
@@ -30,9 +36,10 @@ export default function CaptainLayout() {
       <Tabs.Screen
         name="trip"
         options={{
+          href: null,
           title: 'Рейс',
           tabBarIcon: ({ color, size }) => <Ionicons name="boat" size={size} color={color} />,
-          headerTitle: 'Создать рейс',
+          headerTitle: 'Рейс',
         }}
       />
       <Tabs.Screen
@@ -49,6 +56,14 @@ export default function CaptainLayout() {
           title: 'История',
           tabBarIcon: ({ color, size }) => <Ionicons name="time" size={size} color={color} />,
           headerTitle: 'История рейсов',
+        }}
+      />
+      <Tabs.Screen
+        name="more"
+        options={{
+          title: 'Ещё',
+          tabBarIcon: ({ color, size }) => <Ionicons name="menu" size={size} color={color} />,
+          headerTitle: 'Дополнительно',
         }}
       />
     </Tabs>

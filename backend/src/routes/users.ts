@@ -9,7 +9,7 @@ const router = Router();
 
 router.use(authenticate);
 
-router.get('/', requireRoles('ADMIN', 'DISPATCHER'), async (_req, res: Response, next: NextFunction) => {
+router.get('/', requireRoles('ADMIN'), async (_req, res: Response, next: NextFunction) => {
   try {
     const users = await prisma.user.findMany({
       where: { isActive: true },

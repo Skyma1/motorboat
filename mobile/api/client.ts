@@ -1,7 +1,34 @@
 import axios from 'axios';
+import Constants from 'expo-constants';
 import { useAuthStore } from '@/store/authStore';
 
-const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001/api';
+const DEFAULT_LOCAL_PORT = '3001';
+
+const getHostFromExpo = (): string | null => {
+  const expoHostUri =
+    Constants.expoConfig?.hostUri ||
+    (Constants as unknown as { manifest2?: { extra?: { expoClient?: { hostUri?: string } } } }).manifest2?.extra?.expoClient?.hostUri ||
+    (Constants as unknown as { manifest?: { debuggerHost?: string } }).manifest?.debuggerHost ||
+    null;
+
+  if (!expoHostUri) return null;
+
+  const normalized = expoHostUri.replace(/^[a-zA-Z]+:\/\//, '');
+  const [host] = normalized.split(':');
+  return host || null;
+};
+
+const resolveApiBaseUrl = (): string => {
+  const fromEnv = process.env.EXPO_PUBLIC_API_URL?.trim();
+  if (fromEnv) return fromEnv;
+
+  const expoHost = getHostFromExpo();
+  if (expoHost) return `http://${expoHost}:${DEFAULT_LOCAL_PORT}/api`;
+
+  return `http://127.0.0.1:${DEFAULT_LOCAL_PORT}/api`;
+};
+
+const BASE_URL = resolveApiBaseUrl();
 
 export const getApiBaseUrl = () => BASE_URL;
 

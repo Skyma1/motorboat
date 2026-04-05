@@ -11,10 +11,13 @@ import TripsPage from '@/pages/admin/TripsPage';
 import ReportsPage from '@/pages/admin/ReportsPage';
 import BalancesPage from '@/pages/admin/BalancesPage';
 import { Toaster } from '@/components/ui/toaster';
+import { canAccessRoute } from '@/lib/permissions';
 
-function RequireAuth({ children }: { children: React.ReactNode }) {
-  const { accessToken } = useAuthStore();
+function RequireAuth({ children, route }: { children: React.ReactNode; route?: string }) {
+  const { accessToken, user } = useAuthStore();
   if (!accessToken) return <Navigate to="/login" replace />;
+  if (user?.role === 'CAPTAIN') return <Navigate to="/login" replace />;
+  if (route && !canAccessRoute(user?.role, route)) return <Navigate to="/" replace />;
   return <>{children}</>;
 }
 
@@ -32,13 +35,13 @@ export default function App() {
           }
         >
           <Route index element={<DashboardPage />} />
-          <Route path="users" element={<UsersPage />} />
-          <Route path="boats" element={<BoatsPage />} />
-          <Route path="piers" element={<PiersPage />} />
-          <Route path="rates" element={<RatesPage />} />
-          <Route path="trips" element={<TripsPage />} />
-          <Route path="reports" element={<ReportsPage />} />
-          <Route path="balances" element={<BalancesPage />} />
+          <Route path="users" element={<RequireAuth route="/users"><UsersPage /></RequireAuth>} />
+          <Route path="boats" element={<RequireAuth route="/boats"><BoatsPage /></RequireAuth>} />
+          <Route path="piers" element={<RequireAuth route="/piers"><PiersPage /></RequireAuth>} />
+          <Route path="rates" element={<RequireAuth route="/rates"><RatesPage /></RequireAuth>} />
+          <Route path="trips" element={<RequireAuth route="/trips"><TripsPage /></RequireAuth>} />
+          <Route path="reports" element={<RequireAuth route="/reports"><ReportsPage /></RequireAuth>} />
+          <Route path="balances" element={<RequireAuth route="/balances"><BalancesPage /></RequireAuth>} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

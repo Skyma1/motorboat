@@ -1,31 +1,60 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
+import { Trash2 } from 'lucide-react';
 import api from '@/api/client';
+import { useAuthStore } from '@/store/authStore';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { toast } from '@/hooks/use-toast';
 import {
-  formatMoney, formatDateTime, formatDuration,
+  formatMoney, formatDateTime, formatDateRange, formatDuration,
   tripStatusColor, tripStatusLabel, paymentMethodLabel,
 } from '@/lib/utils';
 import type { Trip } from '@/types';
 
 export default function TripsPage() {
+  const qc = useQueryClient();
+  const { user } = useAuthStore();
   const today = format(new Date(), 'yyyy-MM-dd');
-  const [date, setDate] = useState(today);
+  const [from, setFrom] = useState(today);
+  const [to, setTo] = useState(today);
   const [status, setStatus] = useState('all');
 
   const { data, isLoading } = useQuery<{ trips: Trip[]; total: number }>({
-    queryKey: ['trips', date, status],
+    queryKey: ['trips', from, to, status],
     queryFn: () => {
-      const params = new URLSearchParams({ date, limit: '100' });
+      const params = new URLSearchParams({ from, to, limit: '100' });
       if (status !== 'all') params.set('status', status);
       return api.get(`/trips?${params}`).then((r) => r.data);
     },
   });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/trips/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['trips'] });
+      toast({ title: 'Рейс удален' });
+    },
+    onError: (e: unknown) => {
+      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Ошибка удаления';
+      toast({ title: 'Не удалось удалить рейс', description: msg, variant: 'destructive' });
+    },
+  });
+
+  const handleDelete = (trip: Trip) => {
+    if (user?.role !== 'ADMIN') {
+      toast({ title: 'Удаление недоступно', description: 'Удалять рейсы может только администратор', variant: 'destructive' });
+      return;
+    }
+    const confirmation = window.confirm(`Удалить рейс ${trip.boat.name} на ${formatDateRange(from, to)}? Это действие необратимо.`);
+    if (!confirmation) return;
+    deleteMutation.mutate(trip.id);
+  };
 
   const trips = data?.trips ?? [];
 
@@ -36,10 +65,14 @@ export default function TripsPage() {
         <p className="text-muted-foreground text-sm mt-1">Журнал всех рейсов</p>
       </div>
 
-      <div className="flex gap-4 mb-6">
+      <div className="flex flex-wrap gap-4 mb-6">
         <div className="space-y-1">
-          <Label>Дата</Label>
-          <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-44" />
+          <Label>С даты</Label>
+          <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="w-44" />
+        </div>
+        <div className="space-y-1">
+          <Label>По дату</Label>
+          <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-44" />
         </div>
         <div className="space-y-1">
           <Label>Статус</Label>
@@ -78,18 +111,14 @@ export default function TripsPage() {
                         </div>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-1 text-sm">
                           <div><span className="text-muted-foreground">Капитан:</span> {trip.captain.name}</div>
-                          {trip.dispatcher && <div><span className="text-muted-foreground">Диспетчер:</span> {trip.dispatcher.name}</div>}
                           <div>
-                            <span className="text-muted-foreground">Швартовка:</span>{' '}
-                            {trip.dockingType === 'CITY' ? 'Городская' : trip.dockingType === 'PRIVATE' ? 'Наша' : 'Не заполнено'}
+                            <span className="text-muted-foreground">Период:</span>{' '}
+                            {formatDateRange(trip.date, trip.date)}
                           </div>
                           <div>
-                            <span className="text-muted-foreground">Причал:</span>{' '}
-                            {trip.pier?.name ?? '—'}
+                            <span className="text-muted-foreground">Дата:</span>{' '}
+                            {trip.date}
                           </div>
-                          {trip.dockingType === 'CITY' && (
-                            <div><span className="text-muted-foreground">Часы швартовки:</span> {trip.cityDockHours ?? '—'}</div>
-                          )}
                           {trip.startedAt && <div><span className="text-muted-foreground">Начало:</span> {formatDateTime(trip.startedAt)}</div>}
                           {trip.endedAt && <div><span className="text-muted-foreground">Конец:</span> {formatDateTime(trip.endedAt)}</div>}
                           {trip.durationMinutes != null && (
@@ -97,19 +126,24 @@ export default function TripsPage() {
                           )}
                         </div>
                       </div>
-                      {trip.status === 'COMPLETED' && (
-                        <div className="text-right flex-shrink-0">
+                      <div className="text-right flex-shrink-0">
+                        {trip.status === 'COMPLETED' ? (
                           <p className="text-lg font-bold text-green-600">{formatMoney(trip.price)}</p>
-                          <p className="text-xs text-muted-foreground">прибыль: {formatMoney(trip.profit ?? 0)}</p>
-                          <p className="text-xs text-muted-foreground">капитан: {formatMoney(trip.captainSalary ?? 0)}</p>
-                          <p className="text-xs text-muted-foreground">швартовка: {formatMoney(trip.pierCost ?? 0)}</p>
-                        </div>
-                      )}
-                      {trip.status !== 'COMPLETED' && (
-                        <div className="text-right flex-shrink-0">
+                        ) : (
                           <p className="text-lg font-bold">{formatMoney(trip.price)}</p>
-                        </div>
-                      )}
+                        )}
+                        <p className="text-xs text-muted-foreground">прибыль: {formatMoney(trip.profit ?? 0)}</p>
+                        <p className="text-xs text-muted-foreground">капитан: {formatMoney(trip.captainSalary ?? 0)}</p>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="mt-2 w-full"
+                          onClick={() => handleDelete(trip)}
+                          disabled={deleteMutation.isPending}
+                        >
+                          <Trash2 className="w-3.5 h-3.5 mr-1" /> Удалить
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 </div>

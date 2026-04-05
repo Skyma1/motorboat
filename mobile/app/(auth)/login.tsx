@@ -3,12 +3,14 @@ import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   KeyboardAvoidingView, Platform, ActivityIndicator, Alert,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '@/store/authStore';
 import api, { getApiBaseUrl } from '@/api/client';
 
 export default function LoginScreen() {
   const [login, setLogin] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(false);
   const { setAuth } = useAuthStore();
@@ -81,15 +83,23 @@ export default function LoginScreen() {
 
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Пароль</Text>
-            <TextInput
-              style={styles.input}
-              value={password}
-              onChangeText={setPassword}
-              placeholder="••••••••"
-              placeholderTextColor="#9ca3af"
-              secureTextEntry
-              autoCapitalize="none"
-            />
+            <View style={styles.passwordWrap}>
+              <TextInput
+                style={[styles.input, styles.passwordInput]}
+                value={password}
+                onChangeText={setPassword}
+                placeholder="••••••••"
+                placeholderTextColor="#9ca3af"
+                secureTextEntry={!showPassword}
+                autoCapitalize="none"
+              />
+              <TouchableOpacity
+                style={styles.passwordToggle}
+                onPress={() => setShowPassword((prev) => !prev)}
+              >
+                <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color="#64748b" />
+              </TouchableOpacity>
+            </View>
           </View>
 
           <TouchableOpacity
@@ -137,6 +147,13 @@ const styles = StyleSheet.create({
     height: 48, borderWidth: 1, borderColor: '#d1d5db',
     borderRadius: 10, paddingHorizontal: 14, fontSize: 15, color: '#111827',
     backgroundColor: '#f9fafb',
+  },
+  passwordWrap: { position: 'relative' },
+  passwordInput: { paddingRight: 44 },
+  passwordToggle: {
+    position: 'absolute',
+    right: 12,
+    top: 14,
   },
   button: {
     height: 50, backgroundColor: '#2563eb', borderRadius: 12,

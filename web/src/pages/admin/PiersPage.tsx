@@ -50,6 +50,11 @@ export default function PiersPage() {
     else createMutation.mutate(data);
   };
 
+  const handleDelete = (pier: Pier) => {
+    if (!window.confirm(`Удалить причал "${pier.name}"?`)) return;
+    deleteMutation.mutate(pier.id);
+  };
+
   return (
     <div className="p-8">
       <div className="flex items-center justify-between mb-8">
@@ -80,8 +85,8 @@ export default function PiersPage() {
                   <Button size="sm" variant="outline" onClick={() => openEdit(pier)}>
                     <Pencil className="w-3.5 h-3.5 mr-1" /> Изменить
                   </Button>
-                  <Button size="sm" variant="outline" onClick={() => deleteMutation.mutate(pier.id)}>
-                    <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                  <Button size="sm" variant="outline" onClick={() => handleDelete(pier)}>
+                    <Trash2 className="w-3.5 h-3.5 text-red-500 mr-1" /> Удалить
                   </Button>
                 </div>
               </CardContent>

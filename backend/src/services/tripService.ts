@@ -17,7 +17,7 @@ export const completeTripCalculations = async (tripId: string) => {
   const durationMinutes = calcDurationMinutes(trip.startedAt, trip.endedAt);
   const hourlyRate = trip.captain.captainRate?.hourlyRate ?? 0;
   const captainSalary = (hourlyRate / 60) * durationMinutes;
-  const pierCost = trip.pierCost ?? 0;
+  const pierCost = 0;
   const profit = trip.price - captainSalary - pierCost;
 
   const updated = await prisma.trip.update({

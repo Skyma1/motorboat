@@ -27,7 +27,7 @@ export default function ExpensesScreen() {
   const path = tab === 'EXPENSE' ? '/expenses' : tab === 'PART_TIME' ? '/expenses/part-time' : '/expenses/fuel';
 
   const { data: rows = [], isLoading } = useQuery<Row[]>({
-    queryKey: ['expenses', today],
+    queryKey: ['expenses', today, tab],
     queryFn: () => api.get(`${path}?date=${today}`).then((r) => r.data),
     refetchInterval: 30_000,
   });
@@ -133,7 +133,7 @@ export default function ExpensesScreen() {
 
       {/* Summary */}
       {rows.length > 0 && (
-        <View style={styles.totalRow}>
+        <View style={[styles.totalRow, tab === 'PART_TIME' ? styles.totalRowIncome : styles.totalRowExpense]}>
           <Text style={styles.totalLabel}>
             {tab === 'PART_TIME' ? 'Итого подработок сегодня' : tab === 'FUEL' ? 'Итого заправок сегодня' : 'Итого расходов сегодня'}
           </Text>
@@ -201,7 +201,9 @@ const styles = StyleSheet.create({
   inputComment: { flex: 1 },
   addButton: { backgroundColor: '#2563eb', borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
   addButtonText: { color: '#fff', fontWeight: '600', fontSize: 15 },
-  totalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#fef2f2' },
+  totalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 },
+  totalRowIncome: { backgroundColor: '#ecfdf3' },
+  totalRowExpense: { backgroundColor: '#fef2f2' },
   totalLabel: { fontSize: 14, color: '#6b7280' },
   totalAmount: { fontSize: 16, fontWeight: '700' },
   totalIncome: { color: '#16a34a' },

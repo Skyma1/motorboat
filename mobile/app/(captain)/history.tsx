@@ -94,7 +94,7 @@ export default function HistoryScreen() {
                 )}
                 {item.captainSalary != null && (
                   <View style={styles.infoItem}>
-                    <Text style={styles.infoLabel}>Моя ЗП</Text>
+                    <Text style={styles.infoLabel}>Заработано за рейс</Text>
                     <Text style={styles.infoValue}>{formatMoney(item.captainSalary)}</Text>
                   </View>
                 )}

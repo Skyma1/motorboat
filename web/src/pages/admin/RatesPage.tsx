@@ -5,6 +5,7 @@ import api from '@/api/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from '@/hooks/use-toast';
 import type { User } from '@/types';
 
@@ -31,7 +32,8 @@ export default function RatesPage() {
   });
 
   return (
-    <div className="p-8">
+    <TooltipProvider>
+      <div className="p-8">
       <div className="mb-8">
         <h1 className="text-2xl font-bold">Ставки</h1>
         <p className="text-muted-foreground text-sm mt-1">Настройка индивидуальных ставок для капитанов</p>
@@ -81,16 +83,23 @@ export default function RatesPage() {
                           })}
                         />
                       </div>
-                      <Button
-                        size="sm"
-                        onClick={() => captainRateMutation.mutate({
-                          captainId: captain.id,
-                          hourlyRate: Number(rates.hourlyRate),
-                          exitPayment: Number(rates.exitPayment),
-                        })}
-                      >
-                        <Save className="w-3.5 h-3.5" />
-                      </Button>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            size="sm"
+                            className="min-w-24 justify-center"
+                            onClick={() => captainRateMutation.mutate({
+                              captainId: captain.id,
+                              hourlyRate: Number(rates.hourlyRate),
+                              exitPayment: Number(rates.exitPayment),
+                            })}
+                          >
+                            <Save className="w-3.5 h-3.5 mr-1" />
+                            Сохранить
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Сохранить изменения ставки</TooltipContent>
+                      </Tooltip>
                     </div>
                   </div>
                 );
@@ -100,12 +109,7 @@ export default function RatesPage() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Диспетчеры</CardTitle>
-          <CardDescription>Диспетчеры работают на фиксированной зарплате вне системы расчётов</CardDescription>
-        </CardHeader>
-      </Card>
     </div>
+    </TooltipProvider>
   );
 }

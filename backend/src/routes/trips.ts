@@ -35,12 +35,18 @@ const isHandoverRequired = async (captainId: string): Promise<boolean> => {
 
 router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const { date, status, captainId, page = '1', limit = '50' } = req.query;
+    const { date, from, to, status, captainId, page = '1', limit = '50' } = req.query;
     const skip = (Number(page) - 1) * Number(limit);
 
     const where: Record<string, unknown> = {};
     if (req.user!.role === 'CAPTAIN') where.captainId = req.user!.id;
     if (date) where.date = date as string;
+    if (!date && (from || to)) {
+      const dateFilter: Record<string, string> = {};
+      if (from) dateFilter.gte = from as string;
+      if (to) dateFilter.lte = to as string;
+      where.date = dateFilter;
+    }
     if (status) where.status = status as string;
     if (captainId && req.user!.role !== 'CAPTAIN') where.captainId = captainId as string;
 
@@ -56,6 +62,40 @@ router.get('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
     ]);
 
     res.json({ trips, total, page: Number(page), limit: Number(limit) });
+  } catch (err) { next(err); }
+});
+
+router.delete('/:id', requireRoles('ADMIN', 'DISPATCHER'), async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const trip = await prisma.trip.findUnique({
+      where: { id },
+      include: { boat: { select: { id: true, name: true } } },
+    });
+    if (!trip) throw new AppError('Рейс не найден', 404);
+
+    if (req.user!.role !== 'ADMIN') {
+      throw new AppError('Удалять рейс может только администратор', 403);
+    }
+
+    if (trip.status !== 'CREATED') {
+      throw new AppError('Можно удалять только не начатые рейсы', 400);
+    }
+
+    if (trip.boat.name.toLowerCase().includes('аврора')) {
+      throw new AppError('Рейс на Авроре нельзя удалить: катер участвует в отчетной сверке', 400);
+    }
+
+    await prisma.trip.delete({ where: { id } });
+    await prisma.boat.update({
+      where: { id: trip.boat.id },
+      data: { status: 'FREE' },
+    });
+
+    io.emit('trip:deleted', { tripId: id });
+    io.emit('boat:updated', { boatId: trip.boat.id });
+
+    res.json({ message: 'Рейс удален' });
   } catch (err) { next(err); }
 });
 
@@ -148,53 +188,6 @@ router.post('/', requireRoles('CAPTAIN'), async (req: AuthRequest, res: Response
   } catch (err) { next(err); }
 });
 
-router.put('/:id/docking', requireRoles('ADMIN', 'DISPATCHER'), async (req, res: Response, next: NextFunction) => {
-  try {
-    const { id } = req.params;
-    const { dockingType, pierId, cityDockHours } = req.body;
-    if (!dockingType || !['PRIVATE', 'CITY'].includes(dockingType)) {
-      throw new AppError('Нужно указать тип швартовки: PRIVATE или CITY');
-    }
-
-    const trip = await prisma.trip.findUnique({ where: { id } });
-    if (!trip) throw new AppError('Рейс не найден', 404);
-
-    let computedPierCost = 0;
-    let targetPierId: string | null = null;
-    let targetDockHours: number | null = null;
-
-    if (dockingType === 'CITY') {
-      if (!pierId) throw new AppError('Для городской швартовки выберите причал');
-      const pier = await prisma.pier.findFirst({ where: { id: pierId, isActive: true } });
-      if (!pier) throw new AppError('Причал не найден', 404);
-      const hours = Number(cityDockHours);
-      if (!Number.isFinite(hours) || hours <= 0) throw new AppError('Укажите часы швартовки');
-      computedPierCost = pier.cost * hours;
-      targetPierId = pier.id;
-      targetDockHours = hours;
-    } else {
-      // PRIVATE: швартовка на своем причале бесплатная
-      computedPierCost = 0;
-      targetPierId = null;
-      targetDockHours = null;
-    }
-
-    const updated = await prisma.trip.update({
-      where: { id },
-      data: {
-        dockingType,
-        pierId: targetPierId,
-        cityDockHours: targetDockHours,
-        pierCost: computedPierCost,
-      },
-      include: tripInclude,
-    });
-
-    io.emit('trip:docking-updated', { tripId: id });
-    res.json(updated);
-  } catch (err) { next(err); }
-});
-
 router.post('/:id/start', requireRoles('CAPTAIN'), async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
@@ -221,7 +214,6 @@ router.post('/:id/complete', requireRoles('CAPTAIN'), async (req: AuthRequest, r
     if (!trip) throw new AppError('Рейс не найден', 404);
     if (trip.captainId !== req.user!.id) throw new AppError('Нет доступа', 403);
     if (trip.status !== 'IN_PROGRESS') throw new AppError('Рейс не запущен');
-    if (!trip.dockingType) throw new AppError('Диспетчер должен заполнить швартовку перед завершением');
 
     await prisma.trip.update({
       where: { id },
